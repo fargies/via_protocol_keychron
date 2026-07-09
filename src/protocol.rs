@@ -23,7 +23,9 @@
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    ViaKeychronCommand, ViaKeychronCommandId, ViaKeychronFeatures, ViaKeychronProtocolVersion,
+    VKCommandId, VKDebounceType, VKDfuInfo, VKFeatures, VKProtocolVersion,
+    command::{VKCommandMaker, VKMiscCommandId},
+    data::VKMiscFeatures,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
@@ -37,36 +39,95 @@ impl<'a> ViaKeychronProtocol<'a> {
         Self { device }
     }
 
-    pub fn get_protocol_version(&self) -> ViaResult<ViaKeychronProtocolVersion> {
-        Ok(ViaKeychronProtocolVersion::from(self.device.raw_hid_send(
-            &ViaKeychronCommand::simple(ViaKeychronCommandId::GetProtocolVersion),
-        )?))
+    pub fn get_protocol_version(&self) -> ViaResult<VKProtocolVersion> {
+        VKProtocolVersion::try_from(
+            &self
+                .device
+                .raw_hid_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
+        )
     }
 
     pub fn get_firmware_version(&self) -> ViaResult<String> {
-        let resp = self.device.raw_hid_send(&ViaKeychronCommand::simple(
-            ViaKeychronCommandId::GetFirmwareVersion,
-        ))?;
-        str::from_utf8(&resp[1..resp.iter().position(|&c| c == b'\0').unwrap_or(resp.len())])
-            .map_err(|e| ViaError::Protocol(format!("failed to parse firmware version: {e}")))
-            .map(|r| r.to_string())
+        let cmd = &VKCommandId::GetFirmwareVersion;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        let payload = cmd.check_reply(&resp)?;
+        str::from_utf8(
+            &payload[..payload
+                .iter()
+                .position(|&c| c == b'\0')
+                .unwrap_or(resp.len())],
+        )
+        .map_err(|e| ViaError::Protocol(format!("failed to parse firmware version: {e}")))
+        .map(|r| r.to_string())
     }
 
-    pub fn get_support_feature(&self) -> ViaResult<ViaKeychronFeatures> {
-        let resp = self.device.raw_hid_send(&ViaKeychronCommand::simple(
-            ViaKeychronCommandId::GetSupportFeature,
-        ))?;
-        Ok(ViaKeychronFeatures::from_bits_retain(u16::from_be_bytes([
-            resp[1], resp[2],
+    pub fn get_support_feature(&self) -> ViaResult<VKFeatures> {
+        let cmd = &VKCommandId::GetSupportFeature;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        let payload = cmd.check_reply(&resp)?;
+        Ok(VKFeatures::from_bits_retain(u16::from_le_bytes([
+            payload[1], payload[2],
         ])))
     }
 
     /// @returns `(default_layer_state, layer_state)`
     pub fn get_default_layer(&self) -> ViaResult<(u8, u8)> {
-        let resp = self.device.raw_hid_send(&ViaKeychronCommand::simple(
-            ViaKeychronCommandId::GetDefaultLayer,
-        ))?;
-        Ok((resp[1], resp[2]))
+        let cmd = &VKCommandId::GetDefaultLayer;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        let payload = cmd.check_reply(&resp)?;
+        Ok((payload[0], payload[1]))
+    }
+
+    pub fn get_misc_protcol_version(&self) -> ViaResult<(u16, VKMiscFeatures)> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::MiscGetProtocolVer.to_cmd())?;
+        let payload = VKMiscCommandId::MiscGetProtocolVer.check_reply(&resp)?;
+        Ok((
+            u16::from_le_bytes([payload[0], payload[1]]),
+            VKMiscFeatures::from_bits_retain(payload[2]),
+        ))
+    }
+
+    pub fn get_dfu_info(&self) -> ViaResult<VKDfuInfo> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())?;
+
+        VKDfuInfo::try_from(&resp)
+    }
+
+    pub fn get_language(&self) -> ViaResult<u8> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::LanguageGet.to_cmd())?;
+
+        Ok(VKMiscCommandId::LanguageGet.check_reply(&resp)?[0])
+    }
+
+    pub fn set_language(&self, language: u8) -> ViaResult<()> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::LanguageSet.to_req(&[language]))?;
+
+        VKMiscCommandId::LanguageSet.check_reply(&resp)?;
+        Ok(())
+    }
+
+    pub fn get_debounce(&self) -> ViaResult<(VKDebounceType, u8)> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::DebounceGet.to_cmd())?;
+        let payload = VKMiscCommandId::DebounceGet.check_reply(&resp)?;
+        Ok((VKDebounceType::try_from(payload[0])?, payload[1]))
+    }
+
+    pub fn set_debounce(&self, debounce: VKDebounceType, time: u8) -> ViaResult<()> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::DebounceSet.to_req(&[debounce as u8, time]))?;
+        VKMiscCommandId::DebounceSet.check_reply(&resp)?;
+        Ok(())
     }
 }
 
@@ -100,7 +161,9 @@ pub fn discover_keyboards(api: &hidapi::HidApi) -> Vec<KeyboardInfo> {
 mod tests {
     use super::*;
     use hidapi::HidApi;
+    use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
+
     fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
         let keyboards = discover_keyboards(api);
         assert!(!keyboards.is_empty());
@@ -114,6 +177,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(keyboard)]
     fn info() -> ViaResult<()> {
         let api = HidApi::new()?;
         let kbd = get_keyboard(&api)?;
@@ -130,6 +194,42 @@ mod tests {
 
         let ret = proto.get_default_layer()?;
         tracing::info!(default_layer = ?ret);
+        Ok(())
+    }
+
+    #[test]
+    #[serial(keyboard)]
+    fn misc() -> ViaResult<()> {
+        let api = HidApi::new()?;
+        let kbd = get_keyboard(&api)?;
+        let proto = ViaKeychronProtocol::new(&kbd);
+
+        let ret = proto.get_misc_protcol_version()?;
+        tracing::info!(misc_protocol_version = ?ret);
+        let features = ret.1;
+
+        if features.contains(VKMiscFeatures::MISC_DFU_INFO) {
+            let ret = proto.get_dfu_info()?;
+            tracing::info!(dfu_info = ?ret);
+        } else {
+            proto.get_dfu_info().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::MISC_LANGUAGE) {
+            let ret = proto.get_language()?;
+            tracing::info!(language = ?ret);
+            proto.set_language(ret)?;
+        } else {
+            proto.get_language().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::MISC_DEBOUNCE) {
+            let ret = proto.get_debounce()?;
+            tracing::info!(debounce = ?ret);
+            proto.set_debounce(ret.0, ret.1)?;
+        } else {
+            proto.get_debounce().expect_err("should fail");
+        }
         Ok(())
     }
 }

@@ -20,33 +20,45 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-pub use protocol::{KEYCHRON_VENDOR_ID, ViaKeychronProtocol, discover_keyboards};
+use via_protocol::ViaError;
 
-mod command;
-pub use command::{VKCommand, VKCommandId, VKCommandMaker, VKMiscCommandId};
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[repr(u8)]
+pub enum VKDebounceType {
+    SymDeferGlobal = 0,
+    SymDeferPerRow = 1,
+    SymDeferPerKey = 2,
+    SymEagerPerRow = 3,
+    SymEagerPerKey = 4,
+    AsymEagerDeferPerKey = 5,
+    None = 6,
+    Max = 7,
+}
 
-mod data;
-pub use data::{VKFeatures, VKMiscFeatures, VKProtocolVersion, ViaReportData};
+impl TryFrom<u8> for VKDebounceType {
+    type Error = ViaError;
 
-pub use via_protocol::{KeyboardDevice, ViaResult};
-
-mod dfu;
-pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType};
-
-mod debounce;
-pub use debounce::VKDebounceType;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value <= VKDebounceType::Max as u8 {
+            Ok(unsafe { std::mem::transmute::<u8, VKDebounceType>(value) })
+        } else {
+            Err(ViaError::Protocol(format!(
+                "invalid VKDebounceType: {value}"
+            )))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    #[ctor::ctor(unsafe)]
-    fn setup() {
-        use tracing_subscriber::{
-            EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
-        };
-        Registry::default()
-            .with(EnvFilter::from_default_env())
-            .with(fmt::layer().with_test_writer())
-            .init();
+    use via_protocol::ViaResult;
+
+    use super::*;
+
+    #[test]
+    fn parse() -> ViaResult<()> {
+        assert_eq!(VKDebounceType::try_from(2)?, VKDebounceType::SymDeferPerKey);
+        VKDebounceType::try_from(42).expect_err("should fail to convert");
+        Ok(())
     }
 }

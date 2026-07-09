@@ -21,26 +21,33 @@
 */
 
 use bitflags::bitflags;
-use via_protocol::VIA_REPORT_SIZE;
+use via_protocol::{VIA_REPORT_SIZE, ViaError};
+
+use crate::VKCommandId;
+
+pub type ViaReportData = [u8; VIA_REPORT_SIZE];
 
 #[derive(Debug)]
-pub struct ViaKeychronProtocolVersion {
+pub struct VKProtocolVersion {
     pub protocol_version: u8,
     pub qmk_version: u8,
 }
 
-impl From<[u8; VIA_REPORT_SIZE]> for ViaKeychronProtocolVersion {
-    fn from(value: [u8; VIA_REPORT_SIZE]) -> Self {
-        ViaKeychronProtocolVersion {
-            protocol_version: value[1],
-            qmk_version: value[3],
-        }
+impl TryFrom<&ViaReportData> for VKProtocolVersion {
+    type Error = ViaError;
+
+    fn try_from(value: &ViaReportData) -> Result<Self, Self::Error> {
+        let value = VKCommandId::GetProtocolVersion.check_reply(value)?;
+        Ok(VKProtocolVersion {
+            protocol_version: value[0],
+            qmk_version: value[2],
+        })
     }
 }
 
 bitflags! {
     #[derive(Debug)]
-    pub struct ViaKeychronFeatures: u16 {
+    pub struct VKFeatures: u16 {
         const DEFAULT_LAYER    = 0b1;
         const BLUETOOTH        = 0b10;
         const P24G             = 0b100;
@@ -51,5 +58,19 @@ bitflags! {
         const KEYCHRON_RGB     = 0b1000_0000;
         const QUICK_START      = 0b1_0000_0000;
         const NKRO             = 0b10_0000_0000;
+    }
+}
+
+bitflags! {
+    #[derive(Debug)]
+    pub struct VKMiscFeatures: u8 {
+        const MISC_DFU_INFO            = 0b1;
+        const MISC_LANGUAGE            = 0b10;
+        const MISC_DEBOUNCE            = 0b100;
+        const MISC_SNAP_CLICK          = 0b1000;
+        const MISC_WIRELESS_LPM        = 0b1_0000;
+        const MISC_REPORT_REATE        = 0b10_0000;
+        const MISC_QUICK_START         = 0b100_0000;
+        const MISC_NKRO                = 0b1000_0000;
     }
 }
