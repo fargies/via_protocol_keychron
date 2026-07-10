@@ -78,6 +78,7 @@ pub enum VKMiscCommandId {
 
 impl VKMiscCommandId {
     /// Convenience function, checks reply returns payload if properly built
+    #[tracing::instrument(level = "ERROR", err)]
     pub fn check_reply<'a>(&self, value: &'a ViaReportData) -> ViaResult<&'a [u8]> {
         if value[0] != VKCommandId::MiscCmdGroup as u8 {
             Err(ViaError::Protocol(format!(

@@ -32,10 +32,16 @@ pub use data::{VKFeatures, VKMiscFeatures, VKProtocolVersion, ViaReportData};
 pub use via_protocol::{KeyboardDevice, ViaResult};
 
 mod dfu;
-pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType};
+pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType, VKDfuInfoTrait};
 
 mod debounce;
-pub use debounce::VKDebounceType;
+pub use debounce::{VKDebounceType, VKDebounceTrait};
+
+mod snap_click;
+pub use snap_click::{VKSnapClickConfig, VKSnapClickType, VKSnapClickTrait};
+
+mod wireless_lpm;
+pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};
 
 #[cfg(test)]
 mod tests {

@@ -22,7 +22,7 @@
 
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKMiscCommandId, ViaReportData};
+use crate::{VKCommandMaker, VKMiscCommandId, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
@@ -118,6 +118,19 @@ impl TryFrom<&ViaReportData> for VKDfuInfo {
             "invalid DfuInfo packet, invalid packet: {:?}",
             value
         )))
+    }
+}
+
+pub trait VKDfuInfoTrait {
+    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo>;
+}
+
+impl VKDfuInfoTrait for ViaKeychronProtocol<'_> {
+    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo> {
+        let resp = self
+            .device
+            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())?;
+        VKDfuInfo::try_from(&resp)
     }
 }
 

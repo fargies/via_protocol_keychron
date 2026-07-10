@@ -64,13 +64,13 @@ bitflags! {
 bitflags! {
     #[derive(Debug)]
     pub struct VKMiscFeatures: u8 {
-        const MISC_DFU_INFO            = 0b1;
-        const MISC_LANGUAGE            = 0b10;
-        const MISC_DEBOUNCE            = 0b100;
-        const MISC_SNAP_CLICK          = 0b1000;
-        const MISC_WIRELESS_LPM        = 0b1_0000;
-        const MISC_REPORT_REATE        = 0b10_0000;
-        const MISC_QUICK_START         = 0b100_0000;
-        const MISC_NKRO                = 0b1000_0000;
+        const DFU_INFO            = 0b1;
+        const LANGUAGE            = 0b10;
+        const DEBOUNCE            = 0b100;
+        const SNAP_CLICK          = 0b1000;
+        const WIRELESS_LPM        = 0b1_0000;
+        const REPORT_REATE        = 0b10_0000;
+        const QUICK_START         = 0b100_0000;
+        const NKRO                = 0b1000_0000;
     }
 }

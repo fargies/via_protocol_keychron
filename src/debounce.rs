@@ -20,7 +20,11 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use via_protocol::ViaError;
+use std::fmt::Display;
+
+use via_protocol::{ViaError, ViaResult};
+
+use crate::{VKCommandMaker, VKMiscCommandId, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
@@ -46,6 +50,72 @@ impl TryFrom<u8> for VKDebounceType {
                 "invalid VKDebounceType: {value}"
             )))
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct VKDebounceConfig {
+    data: Vec<u8>,
+}
+
+impl VKDebounceConfig {
+    pub fn get_type(&self) -> VKDebounceType {
+        VKDebounceType::try_from(self.data[0]).unwrap()
+    }
+
+    pub fn set_type(&mut self, value: VKDebounceType) {
+        self.data[0] = value as u8;
+    }
+
+    pub fn get_time(&self) -> u8 {
+        self.data[1]
+    }
+
+    pub fn set_time(&mut self, value: u8) {
+        self.data[1] = value;
+    }
+}
+
+impl Display for VKDebounceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VKDebounceConfig")
+            .field("type", &self.get_type())
+            .field("time", &self.get_time())
+            .finish()
+    }
+}
+
+impl TryFrom<ViaReportData> for VKDebounceConfig {
+    type Error = ViaError;
+
+    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
+        let payload = VKMiscCommandId::DebounceGet.check_reply(&value)?;
+        VKDebounceType::try_from(payload[0])?;
+        Ok(VKDebounceConfig { data: payload.into() })
+    }
+}
+
+pub trait VKDebounceTrait {
+    fn get_debounce(&self) -> ViaResult<VKDebounceConfig>;
+
+    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()>;
+}
+
+impl VKDebounceTrait for ViaKeychronProtocol<'_> {
+    fn get_debounce(&self) -> ViaResult<VKDebounceConfig> {
+        let cmd = &VKMiscCommandId::DebounceGet;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        VKDebounceConfig::try_from(resp)
+    }
+
+    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()> {
+        let cmd = &VKMiscCommandId::DebounceSet;
+        let resp = self
+            .device
+            .raw_hid_send(&cmd.to_req(&debounce.data))?;
+
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 

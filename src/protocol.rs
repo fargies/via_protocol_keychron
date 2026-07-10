@@ -23,15 +23,13 @@
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKCommandId, VKDebounceType, VKDfuInfo, VKFeatures, VKProtocolVersion,
-    command::{VKCommandMaker, VKMiscCommandId},
-    data::VKMiscFeatures,
+    VKCommandId, VKCommandMaker, VKFeatures, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
 
 pub struct ViaKeychronProtocol<'a> {
-    device: &'a KeyboardDevice,
+    pub device: &'a KeyboardDevice,
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
@@ -79,54 +77,27 @@ impl<'a> ViaKeychronProtocol<'a> {
     }
 
     pub fn get_misc_protcol_version(&self) -> ViaResult<(u16, VKMiscFeatures)> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::MiscGetProtocolVer.to_cmd())?;
-        let payload = VKMiscCommandId::MiscGetProtocolVer.check_reply(&resp)?;
+        let cmd = &VKMiscCommandId::MiscGetProtocolVer;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        let payload = cmd.check_reply(&resp)?;
         Ok((
             u16::from_le_bytes([payload[0], payload[1]]),
             VKMiscFeatures::from_bits_retain(payload[2]),
         ))
     }
 
-    pub fn get_dfu_info(&self) -> ViaResult<VKDfuInfo> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())?;
-
-        VKDfuInfo::try_from(&resp)
-    }
-
     pub fn get_language(&self) -> ViaResult<u8> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::LanguageGet.to_cmd())?;
+        let cmd = &VKMiscCommandId::LanguageGet;
+        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
 
-        Ok(VKMiscCommandId::LanguageGet.check_reply(&resp)?[0])
+        Ok(cmd.check_reply(&resp)?[0])
     }
 
     pub fn set_language(&self, language: u8) -> ViaResult<()> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::LanguageSet.to_req(&[language]))?;
+        let cmd = &VKMiscCommandId::LanguageSet;
+        let resp = self.device.raw_hid_send(&cmd.to_req(&[language]))?;
 
-        VKMiscCommandId::LanguageSet.check_reply(&resp)?;
-        Ok(())
-    }
-
-    pub fn get_debounce(&self) -> ViaResult<(VKDebounceType, u8)> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::DebounceGet.to_cmd())?;
-        let payload = VKMiscCommandId::DebounceGet.check_reply(&resp)?;
-        Ok((VKDebounceType::try_from(payload[0])?, payload[1]))
-    }
-
-    pub fn set_debounce(&self, debounce: VKDebounceType, time: u8) -> ViaResult<()> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::DebounceSet.to_req(&[debounce as u8, time]))?;
-        VKMiscCommandId::DebounceSet.check_reply(&resp)?;
+        cmd.check_reply(&resp)?;
         Ok(())
     }
 }
@@ -160,6 +131,7 @@ pub fn discover_keyboards(api: &hidapi::HidApi) -> Vec<KeyboardInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{VKDebounceTrait, VKDfuInfoTrait, VKSnapClickTrait, VKWirelessLpmTrait};
     use hidapi::HidApi;
     use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
@@ -208,14 +180,14 @@ mod tests {
         tracing::info!(misc_protocol_version = ?ret);
         let features = ret.1;
 
-        if features.contains(VKMiscFeatures::MISC_DFU_INFO) {
+        if features.contains(VKMiscFeatures::DFU_INFO) {
             let ret = proto.get_dfu_info()?;
             tracing::info!(dfu_info = ?ret);
         } else {
             proto.get_dfu_info().expect_err("should fail");
         }
 
-        if features.contains(VKMiscFeatures::MISC_LANGUAGE) {
+        if features.contains(VKMiscFeatures::LANGUAGE) {
             let ret = proto.get_language()?;
             tracing::info!(language = ?ret);
             proto.set_language(ret)?;
@@ -223,12 +195,35 @@ mod tests {
             proto.get_language().expect_err("should fail");
         }
 
-        if features.contains(VKMiscFeatures::MISC_DEBOUNCE) {
-            let ret = proto.get_debounce()?;
-            tracing::info!(debounce = ?ret);
-            proto.set_debounce(ret.0, ret.1)?;
+        if features.contains(VKMiscFeatures::DEBOUNCE) {
+            let debounce = proto.get_debounce()?;
+            tracing::info!(%debounce);
+            tracing::trace!(?debounce);
+            proto.set_debounce(&debounce)?;
         } else {
             proto.get_debounce().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::SNAP_CLICK) {
+            let count = proto.get_snap_click_info()?;
+            tracing::info!(snap_click_count = count);
+            assert!(count >= 9);
+            let snaps = proto.get_snap_click(0, 9)?;
+            assert_eq!(snaps.len(), 9);
+            tracing::info!(?snaps);
+            proto.set_snap_click(0, snaps.as_slice())?;
+            proto.save_snap_click()?;
+        } else {
+            proto.get_snap_click_info().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::WIRELESS_LPM) {
+            let wireless_lpm = proto.get_wireless_lpm()?;
+            tracing::info!(%wireless_lpm);
+            tracing::trace!(?wireless_lpm);
+            proto.set_wireless_lpm(&wireless_lpm)?;
+        } else {
+            proto.get_wireless_lpm().expect_err("should fail");
         }
         Ok(())
     }
