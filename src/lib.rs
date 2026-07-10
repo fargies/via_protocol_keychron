@@ -43,6 +43,12 @@ pub use snap_click::{VKSnapClickConfig, VKSnapClickType, VKSnapClickTrait};
 mod wireless_lpm;
 pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};
 
+mod report_rate;
+pub use report_rate::{VKReportRateConfig, VKReportRateTrait};
+
+mod nkro;
+pub use nkro::{VKNkroConfig, VKNkroTrait};
+
 #[cfg(test)]
 mod tests {
     #[ctor::ctor(unsafe)]

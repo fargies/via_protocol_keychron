@@ -133,7 +133,10 @@ mod tests {
     use std::sync::LazyLock;
 
     use super::*;
-    use crate::{VKDebounceTrait, VKDfuInfoTrait, VKSnapClickTrait, VKWirelessLpmTrait};
+    use crate::{
+        VKDebounceTrait, VKDfuInfoTrait, VKNkroTrait, VKReportRateTrait, VKSnapClickTrait,
+        VKWirelessLpmTrait,
+    };
     use hidapi::HidApi;
     use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
@@ -226,6 +229,24 @@ mod tests {
             proto.set_wireless_lpm(&wireless_lpm)?;
         } else {
             proto.get_wireless_lpm().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::REPORT_RATE) {
+            let report_rate = proto.get_report_rate()?;
+            tracing::info!(%report_rate);
+            tracing::trace!(?report_rate);
+            proto.set_report_rate(&report_rate)?;
+        } else {
+            proto.get_report_rate().expect_err("should fail");
+        }
+
+        if features.contains(VKMiscFeatures::NKRO) {
+            let nkro = proto.get_nkro()?;
+            tracing::info!(%nkro);
+            tracing::trace!(?nkro);
+            proto.set_nkro(nkro.is_enabled())?;
+        } else {
+            proto.get_nkro().expect_err("should fail");
         }
         Ok(())
     }

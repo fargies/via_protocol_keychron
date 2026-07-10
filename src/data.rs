@@ -69,7 +69,7 @@ bitflags! {
         const DEBOUNCE            = 0b100;
         const SNAP_CLICK          = 0b1000;
         const WIRELESS_LPM        = 0b1_0000;
-        const REPORT_REATE        = 0b10_0000;
+        const REPORT_RATE         = 0b10_0000;
         const QUICK_START         = 0b100_0000;
         const NKRO                = 0b1000_0000;
     }
