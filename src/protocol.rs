@@ -130,11 +130,15 @@ pub fn discover_keyboards(api: &hidapi::HidApi) -> Vec<KeyboardInfo> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
     use super::*;
     use crate::{VKDebounceTrait, VKDfuInfoTrait, VKSnapClickTrait, VKWirelessLpmTrait};
     use hidapi::HidApi;
     use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
+
+    static HID: LazyLock<HidApi> = LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
 
     fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
         let keyboards = discover_keyboards(api);
@@ -143,16 +147,15 @@ mod tests {
     }
 
     #[test]
+    #[serial(keyboard)]
     fn connect() -> ViaResult<()> {
-        let api = HidApi::new()?;
-        get_keyboard(&api).and(Ok(()))
+        get_keyboard(&HID).and(Ok(()))
     }
 
     #[test]
     #[serial(keyboard)]
     fn info() -> ViaResult<()> {
-        let api = HidApi::new()?;
-        let kbd = get_keyboard(&api)?;
+        let kbd = get_keyboard(&HID)?;
         let proto = ViaKeychronProtocol::new(&kbd);
 
         let ret = proto.get_protocol_version()?;
@@ -172,8 +175,7 @@ mod tests {
     #[test]
     #[serial(keyboard)]
     fn misc() -> ViaResult<()> {
-        let api = HidApi::new()?;
-        let kbd = get_keyboard(&api)?;
+        let kbd = get_keyboard(&HID)?;
         let proto = ViaKeychronProtocol::new(&kbd);
 
         let ret = proto.get_misc_protcol_version()?;
