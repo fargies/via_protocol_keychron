@@ -32,6 +32,14 @@ pub struct VKReportRateConfig {
 }
 
 impl VKReportRateConfig {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        proto.get_report_rate()
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        proto.set_report_rate(self)
+    }
+
     pub fn get_div(&self) -> u8 {
         self.data[0]
     }

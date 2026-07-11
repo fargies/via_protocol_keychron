@@ -29,10 +29,10 @@ mod dfu;
 pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType, VKDfuInfoTrait};
 
 mod debounce;
-pub use debounce::{VKDebounceType, VKDebounceTrait};
+pub use debounce::{VKDebounceType, VKDebounceTrait, VKDebounceConfig};
 
 mod snap_click;
-pub use snap_click::{VKSnapClickConfig, VKSnapClickType, VKSnapClickTrait};
+pub use snap_click::{VKSnapClick, VKSnapClickType, VKSnapClickTrait, VKSnapClickConfig};
 
 mod wireless_lpm;
 pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};

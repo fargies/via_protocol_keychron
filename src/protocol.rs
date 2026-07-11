@@ -134,8 +134,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        VKDebounceTrait, VKDfuInfoTrait, VKNkroTrait, VKReportRateTrait, VKSnapClickTrait,
-        VKWirelessLpmTrait,
+        VKDebounceConfig, VKDfuInfo, VKNkroConfig, VKReportRateConfig, VKSnapClickConfig,
+        VKWirelessLpmConfig,
     };
     use hidapi::HidApi;
     use serial_test::serial;
@@ -186,10 +186,10 @@ mod tests {
         let features = ret.1;
 
         if features.contains(VKMiscFeatures::DFU_INFO) {
-            let ret = proto.get_dfu_info()?;
-            tracing::info!(dfu_info = ?ret);
+            let dfu_info = VKDfuInfo::load(&proto)?;
+            tracing::info!(?dfu_info);
         } else {
-            proto.get_dfu_info().expect_err("should fail");
+            VKDfuInfo::load(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::LANGUAGE) {
@@ -201,52 +201,53 @@ mod tests {
         }
 
         if features.contains(VKMiscFeatures::DEBOUNCE) {
-            let debounce = proto.get_debounce()?;
+            let debounce = VKDebounceConfig::load(&proto)?;
             tracing::info!(%debounce);
             tracing::trace!(?debounce);
-            proto.set_debounce(&debounce)?;
+            debounce.send(&proto)?;
         } else {
-            proto.get_debounce().expect_err("should fail");
+            VKDebounceConfig::load(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::SNAP_CLICK) {
-            let count = proto.get_snap_click_info()?;
-            tracing::info!(snap_click_count = count);
-            assert!(count >= 9);
-            let snaps = proto.get_snap_click(0, 9)?;
-            assert_eq!(snaps.len(), 9);
-            tracing::info!(?snaps);
-            proto.set_snap_click(0, snaps.as_slice())?;
-            proto.save_snap_click()?;
+            let snap_click_count = VKSnapClickConfig::count(&proto)?;
+            tracing::info!(snap_click_count);
+            assert!(snap_click_count >= 9);
+            let snaps = VKSnapClickConfig::load(0, 9, &proto)?;
+            assert_eq!(snaps.config.len(), 9);
+            tracing::info!(%snaps);
+            tracing::trace!(?snaps);
+            snaps.send(&proto)?;
+            snaps.save(&proto)?;
         } else {
-            proto.get_snap_click_info().expect_err("should fail");
+            VKSnapClickConfig::count(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::WIRELESS_LPM) {
-            let wireless_lpm = proto.get_wireless_lpm()?;
+            let wireless_lpm = VKWirelessLpmConfig::load(&proto)?;
             tracing::info!(%wireless_lpm);
             tracing::trace!(?wireless_lpm);
-            proto.set_wireless_lpm(&wireless_lpm)?;
+            wireless_lpm.send(&proto)?;
         } else {
-            proto.get_wireless_lpm().expect_err("should fail");
+            VKWirelessLpmConfig::load(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::REPORT_RATE) {
-            let report_rate = proto.get_report_rate()?;
+            let report_rate = VKReportRateConfig::load(&proto)?;
             tracing::info!(%report_rate);
             tracing::trace!(?report_rate);
-            proto.set_report_rate(&report_rate)?;
+            report_rate.send(&proto)?;
         } else {
-            proto.get_report_rate().expect_err("should fail");
+            VKReportRateConfig::load(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::NKRO) {
-            let nkro = proto.get_nkro()?;
+            let nkro = VKNkroConfig::load(&proto)?;
             tracing::info!(%nkro);
             tracing::trace!(?nkro);
-            proto.set_nkro(nkro.is_enabled())?;
+            nkro.send(&proto)?;
         } else {
-            proto.get_nkro().expect_err("should fail");
+            VKNkroConfig::load(&proto).expect_err("should fail");
         }
         Ok(())
     }

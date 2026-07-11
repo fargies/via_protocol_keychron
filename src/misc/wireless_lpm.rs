@@ -32,6 +32,14 @@ pub struct VKWirelessLpmConfig {
 }
 
 impl VKWirelessLpmConfig {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        proto.get_wireless_lpm()
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        proto.set_wireless_lpm(self)
+    }
+
     pub fn get_backlit_disable_time(&self) -> u16 {
         u16::from_le_bytes([self.data[0], self.data[1]])
     }

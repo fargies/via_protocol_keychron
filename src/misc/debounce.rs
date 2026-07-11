@@ -59,6 +59,14 @@ pub struct VKDebounceConfig {
 }
 
 impl VKDebounceConfig {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        proto.get_debounce()
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        proto.set_debounce(self)
+    }
+
     pub fn get_type(&self) -> VKDebounceType {
         VKDebounceType::try_from(self.data[0]).unwrap()
     }

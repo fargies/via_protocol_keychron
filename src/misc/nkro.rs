@@ -30,8 +30,24 @@ pub struct VKNkroConfig {
 }
 
 impl VKNkroConfig {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        proto.get_nkro()
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        proto.set_nkro(self.is_enabled())
+    }
+
     pub fn is_enabled(&self) -> bool {
         (self.data[0] & 0b1) != 0
+    }
+
+    pub fn set_enabled(&mut self, value: bool) {
+        if value {
+            self.data[0] |= 0b1;
+        } else {
+            self.data[0] &= !0b1;
+        }
     }
 
     pub fn is_available(&self) -> bool {

@@ -24,30 +24,18 @@ mod protocol;
 pub use protocol::{KEYCHRON_VENDOR_ID, ViaKeychronProtocol, discover_keyboards};
 
 mod command;
-pub use command::{VKCommand, VKCommandId, VKCommandMaker, VKMiscCommandId};
+pub use command::{VKCommand, VKCommandId, VKCommandMaker};
+
+mod misc;
+pub use misc::*;
+
+mod rgb;
+pub use rgb::*;
 
 mod data;
 pub use data::{VKFeatures, VKMiscFeatures, VKProtocolVersion, ViaReportData};
 
-pub use via_protocol::{KeyboardDevice, ViaResult};
-
-mod dfu;
-pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType, VKDfuInfoTrait};
-
-mod debounce;
-pub use debounce::{VKDebounceType, VKDebounceTrait};
-
-mod snap_click;
-pub use snap_click::{VKSnapClickConfig, VKSnapClickType, VKSnapClickTrait};
-
-mod wireless_lpm;
-pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};
-
-mod report_rate;
-pub use report_rate::{VKReportRateConfig, VKReportRateTrait};
-
-mod nkro;
-pub use nkro::{VKNkroConfig, VKNkroTrait};
+pub use via_protocol::{KeyboardDevice, ViaResult, ViaError};
 
 #[cfg(test)]
 mod tests {

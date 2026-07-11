@@ -77,6 +77,12 @@ pub struct VKDfuInfo {
     pub chip: VKDfuChipType,
 }
 
+impl VKDfuInfo {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        proto.get_dfu_info()
+    }
+}
+
 fn parse_dfu_str(data: &[u8]) -> ViaResult<String> {
     if data.is_empty() {
         Err(ViaError::Protocol("empty dfu string payload".to_string()))
