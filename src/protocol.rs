@@ -59,7 +59,7 @@ impl<'a> ViaKeychronProtocol<'a> {
         .map(|r| r.to_string())
     }
 
-    pub fn get_support_feature(&self) -> ViaResult<VKFeatures> {
+    pub fn get_support_features(&self) -> ViaResult<VKFeatures> {
         let cmd = &VKCommandId::GetSupportFeature;
         let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
@@ -129,7 +129,7 @@ pub fn discover_keyboards(api: &hidapi::HidApi) -> Vec<KeyboardInfo> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::sync::LazyLock;
 
     use super::*;
@@ -141,9 +141,9 @@ mod tests {
     use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
 
-    static HID: LazyLock<HidApi> = LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
+    pub static HID: LazyLock<HidApi> = LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
 
-    fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
+    pub fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
         let keyboards = discover_keyboards(api);
         assert!(!keyboards.is_empty());
         KeyboardDevice::open(api, keyboards.first().unwrap().clone())
@@ -167,8 +167,8 @@ mod tests {
         let ret = proto.get_firmware_version()?;
         tracing::info!(firmware_version = ?ret);
 
-        let ret = proto.get_support_feature()?;
-        tracing::info!(support_feature = ?ret);
+        let support_features = proto.get_support_features()?;
+        tracing::info!(?support_features);
 
         let ret = proto.get_default_layer()?;
         tracing::info!(default_layer = ?ret);
