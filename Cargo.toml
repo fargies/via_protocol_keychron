@@ -7,6 +7,7 @@ edition = "2024"
 [dependencies]
 bitflags = "2.13.0"
 hidapi = "2.6.6"
+palette = { version = "0.7.6", features = ["serde"] }
 tracing = "0.1.44"
 via-protocol = "0.1.0"
 

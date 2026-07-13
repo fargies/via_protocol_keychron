@@ -26,6 +26,12 @@ use crate::{
     VKCommand, VKCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData, ViaResult,
 };
 
+mod version;
+pub use version::*;
+
+mod indicators;
+pub use indicators::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum VKRgbCommandId {
@@ -88,25 +94,29 @@ impl VKCommandMaker for VKRgbCommandId {
     }
 }
 
-pub trait VKRgbTrait {
-    fn get_rgb_protocol_version(&self) -> ViaResult<[u8; 2]>;
+pub trait VKRgbTrait: VKRgbProtocolVersionTrait + VKRgbIndicatorsTrait {
+    fn save_rgb(&self) -> ViaResult<()>;
 }
 
 impl VKRgbTrait for ViaKeychronProtocol<'_> {
-    fn get_rgb_protocol_version(&self) -> ViaResult<[u8; 2]> {
-        let cmd = &VKRgbCommandId::RgbGetProtocolVer;
+    fn save_rgb(&self) -> ViaResult<()> {
+        let cmd = &VKRgbCommandId::RgbSave;
         let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        let payload = cmd.check_reply(&resp)?;
-        Ok([payload[0], payload[1]])
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use palette::{Hsv, IntoColor, convert::{FromColorUnclamped, IntoColorUnclamped}, encoding::Srgb, named::AZURE};
     use serial_test::serial;
 
     use super::*;
-    use crate::{VKFeatures, protocol::tests::{HID, get_keyboard}};
+    use crate::{
+        VKFeatures, ViaKeychronProtocol,
+        protocol::tests::{HID, get_keyboard},
+    };
 
     #[test]
     #[serial(keyboard)]
@@ -118,11 +128,22 @@ mod tests {
         tracing::info!(?support_features);
 
         if support_features.contains(VKFeatures::KEYCHRON_RGB) {
-            let rgb_ver = proto.get_rgb_protocol_version()?;
+            let rgb_ver = VKRgbProtocolVersion::load(&proto)?;
             tracing::info!(?rgb_ver);
+
+            proto.save_rgb()?;
         } else {
-            proto.get_rgb_protocol_version().expect_err("should fail");
+            VKRgbProtocolVersion::load(&proto).expect_err("should fail");
+            return Ok(());
         }
+
+        let mut indicators = VKRgbIndicatorsConfig::load(&proto)?;
+        tracing::info!(%indicators);
+        let initial = indicators.get_color();
+        indicators.set_color(&palette::named::RED.into_format::<f32>().into_color());
+        indicators.send(&proto)?;
+        indicators.set_color(&initial);
+        indicators.send(&proto)?;
         Ok(())
     }
 }
