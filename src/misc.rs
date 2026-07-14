@@ -40,6 +40,8 @@ pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};
 mod report_rate;
 pub use report_rate::{VKReportRateConfig, VKReportRateTrait};
 
+mod language;
+pub use language::{VKLanguageLayout};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

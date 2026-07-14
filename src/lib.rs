@@ -26,6 +26,12 @@ pub use protocol::{KEYCHRON_VENDOR_ID, ViaKeychronProtocol, discover_keyboards};
 mod command;
 pub use command::{VKCommand, VKCommandId, VKCommandMaker};
 
+mod version;
+pub use version::VKProtocolVersion;
+
+mod features;
+pub use features::*;
+
 mod misc;
 pub use misc::*;
 
@@ -33,9 +39,9 @@ mod rgb;
 pub use rgb::*;
 
 mod data;
-pub use data::{VKFeatures, VKMiscFeatures, VKProtocolVersion, ViaReportData};
+pub use data::{VKMiscFeatures, ViaReportData};
 
-pub use via_protocol::{KeyboardDevice, ViaResult, ViaError};
+pub use via_protocol::{KeyboardDevice, ViaError, ViaResult};
 
 #[cfg(test)]
 mod tests {

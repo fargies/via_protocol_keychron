@@ -114,8 +114,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        VKFeatures, ViaKeychronProtocol,
-        protocol::tests::{HID, get_keyboard},
+        VKFeatures, VKFeaturesTrait, ViaKeychronProtocol, protocol::tests::{HID, get_keyboard},
     };
 
     #[test]

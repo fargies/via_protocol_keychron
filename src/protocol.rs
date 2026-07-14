@@ -20,29 +20,28 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
+use std::sync::Mutex;
+
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKCommandId, VKCommandMaker, VKFeatures, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
+    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
+    version::VKProtocolType,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
 
 pub struct ViaKeychronProtocol<'a> {
     pub device: &'a KeyboardDevice,
+    pub protocol: Mutex<Option<VKProtocolVersion>>,
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
     pub fn new(device: &'a KeyboardDevice) -> Self {
-        Self { device }
-    }
-
-    pub fn get_protocol_version(&self) -> ViaResult<VKProtocolVersion> {
-        VKProtocolVersion::try_from(
-            &self
-                .device
-                .raw_hid_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
-        )
+        Self {
+            device,
+            protocol: Mutex::new(None),
+        }
     }
 
     pub fn get_firmware_version(&self) -> ViaResult<String> {
@@ -59,15 +58,6 @@ impl<'a> ViaKeychronProtocol<'a> {
         .map(|r| r.to_string())
     }
 
-    pub fn get_support_features(&self) -> ViaResult<VKFeatures> {
-        let cmd = &VKCommandId::GetSupportFeature;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        let payload = cmd.check_reply(&resp)?;
-        Ok(VKFeatures::from_bits_retain(u16::from_le_bytes([
-            payload[1], payload[2],
-        ])))
-    }
-
     /// @returns `(default_layer_state, layer_state)`
     pub fn get_default_layer(&self) -> ViaResult<(u8, u8)> {
         let cmd = &VKCommandId::GetDefaultLayer;
@@ -80,25 +70,12 @@ impl<'a> ViaKeychronProtocol<'a> {
         let cmd = &VKMiscCommandId::MiscGetProtocolVer;
         let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
-        Ok((
-            u16::from_le_bytes([payload[0], payload[1]]),
-            VKMiscFeatures::from_bits_retain(payload[2]),
-        ))
-    }
+        let features = match VKProtocolVersion::load(self)?.protocol {
+            VKProtocolType::Zmk => VKMiscFeatures::DEBOUNCE,
+            VKProtocolType::Qmk => VKMiscFeatures::from_bits_retain(payload[2]),
+        };
 
-    pub fn get_language(&self) -> ViaResult<u8> {
-        let cmd = &VKMiscCommandId::LanguageGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-
-        Ok(cmd.check_reply(&resp)?[0])
-    }
-
-    pub fn set_language(&self, language: u8) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::LanguageSet;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[language]))?;
-
-        cmd.check_reply(&resp)?;
-        Ok(())
+        Ok((u16::from_le_bytes([payload[0], payload[1]]), features))
     }
 }
 
@@ -134,14 +111,14 @@ pub mod tests {
 
     use super::*;
     use crate::{
-        VKDebounceConfig, VKDfuInfo, VKNkroConfig, VKReportRateConfig, VKSnapClickConfig,
-        VKWirelessLpmConfig,
+        VKDebounceConfig, VKDfuInfo, VKFeatures, VKLanguageLayout, VKNkroConfig, VKReportRateConfig, VKSnapClickConfig, VKWirelessLpmConfig,
     };
     use hidapi::HidApi;
     use serial_test::serial;
     use via_protocol::{KeyboardDevice, ViaResult};
 
-    pub static HID: LazyLock<HidApi> = LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
+    pub static HID: LazyLock<HidApi> =
+        LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
 
     pub fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
         let keyboards = discover_keyboards(api);
@@ -161,13 +138,13 @@ pub mod tests {
         let kbd = get_keyboard(&HID)?;
         let proto = ViaKeychronProtocol::new(&kbd);
 
-        let ret = proto.get_protocol_version()?;
+        let ret = VKProtocolVersion::load(&proto)?;
         tracing::info!(protocol_version = ?ret);
 
         let ret = proto.get_firmware_version()?;
         tracing::info!(firmware_version = ?ret);
 
-        let support_features = proto.get_support_features()?;
+        let support_features = VKFeatures::load(&proto)?;
         tracing::info!(?support_features);
 
         let ret = proto.get_default_layer()?;
@@ -193,11 +170,11 @@ pub mod tests {
         }
 
         if features.contains(VKMiscFeatures::LANGUAGE) {
-            let ret = proto.get_language()?;
+            let ret = VKLanguageLayout::load(&proto)?;
             tracing::info!(language = ?ret);
-            proto.set_language(ret)?;
+            ret.save(&proto)?;
         } else {
-            proto.get_language().expect_err("should fail");
+            VKLanguageLayout::load(&proto).expect_err("should fail");
         }
 
         if features.contains(VKMiscFeatures::DEBOUNCE) {

@@ -119,3 +119,13 @@ impl VKRgbIndicatorsTrait for ViaKeychronProtocol<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use palette::{Hsv, Srgb, convert::FromColorUnclamped};
+
+    #[test]
+    fn rgb_conv() {
+        // let value: Hsv<Srgb, u8> = Hsv::<Srgb, u8>::from_color_unclamped(palette::named::RED);
+    }
+}

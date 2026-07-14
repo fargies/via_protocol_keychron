@@ -116,14 +116,18 @@ impl TryFrom<&ViaReportData> for VKDfuInfo {
                     ret.chip = value[idx + 2].try_into()?;
                     idx += 3;
                 }
-                VKDfuInfoType::End => return Ok(ret),
+                VKDfuInfoType::End => break,
                 _ => break,
             }
         }
-        Err(ViaError::Protocol(format!(
-            "invalid DfuInfo packet, invalid packet: {:?}",
-            value
-        )))
+        if ret.name.is_empty() || ret.chip == VKDfuChipType::Unknown {
+            Err(ViaError::Protocol(format!(
+                "invalid DfuInfo packet, invalid packet: {:?}",
+                value
+            )))
+        } else {
+            Ok(ret)
+        }
     }
 }
 

@@ -21,45 +21,9 @@
 */
 
 use bitflags::bitflags;
-use via_protocol::{VIA_REPORT_SIZE, ViaError};
-
-use crate::VKCommandId;
+use via_protocol::VIA_REPORT_SIZE;
 
 pub type ViaReportData = [u8; VIA_REPORT_SIZE];
-
-#[derive(Debug)]
-pub struct VKProtocolVersion {
-    pub protocol_version: u8,
-    pub qmk_version: u8,
-}
-
-impl TryFrom<&ViaReportData> for VKProtocolVersion {
-    type Error = ViaError;
-
-    fn try_from(value: &ViaReportData) -> Result<Self, Self::Error> {
-        let value = VKCommandId::GetProtocolVersion.check_reply(value)?;
-        Ok(VKProtocolVersion {
-            protocol_version: value[0],
-            qmk_version: value[2],
-        })
-    }
-}
-
-bitflags! {
-    #[derive(Debug)]
-    pub struct VKFeatures: u16 {
-        const DEFAULT_LAYER    = 0b1;
-        const BLUETOOTH        = 0b10;
-        const P24G             = 0b100;
-        const ANALOG_MATRIX    = 0b1000;
-        const STATE_NOTIFY     = 0b1_0000;
-        const DYNAMIC_DEBOUNCE = 0b10_0000;
-        const SNAP_CLICK       = 0b100_0000;
-        const KEYCHRON_RGB     = 0b1000_0000;
-        const QUICK_START      = 0b1_0000_0000;
-        const NKRO             = 0b10_0000_0000;
-    }
-}
 
 bitflags! {
     #[derive(Debug)]
