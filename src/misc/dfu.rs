@@ -170,17 +170,15 @@ mod tests {
         );
 
         data[1] = VKMiscCommandId::DfuInfoGet as u8;
-        let info = VKDfuInfo::try_from(&data)?;
-        assert!(info.name.is_empty());
-        assert_eq!(info.chip, VKDfuChipType::Unknown);
+        // both type and name must be set
+        VKDfuInfo::try_from(&data).expect_err("should fail");
 
         data[3] = VKDfuInfoType::ChipType as u8;
         data[4] = 1;
         data[5] = 42;
         VKDfuInfo::try_from(&data).expect_err("should fail");
         data[5] = VKDfuChipType::STM32 as u8;
-        let info = VKDfuInfo::try_from(&data)?;
-        assert_eq!(info.chip, VKDfuChipType::STM32);
+        VKDfuInfo::try_from(&data).expect_err("should fail");
 
         data[6] = VKDfuInfoType::ChipName as u8;
         data[7] = 3;
