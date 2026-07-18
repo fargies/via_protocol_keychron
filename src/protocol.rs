@@ -20,28 +20,46 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
-    version::VKProtocolType,
+    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion, VKRgbMixedInfo, version::VKProtocolType,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
 
 pub struct ViaKeychronProtocol<'a> {
+    /// @brief device pointer
     pub device: &'a KeyboardDevice,
-    pub protocol: Mutex<Option<VKProtocolVersion>>,
+
+    /// @brief cached device information
+    pub info: Mutex<Arc<VKDeviceInfo>>
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct VKDeviceInfo {
+    pub protocol: Option<Arc<VKProtocolVersion>>,
+    pub mixed_info: Option<Arc<VKRgbMixedInfo>>
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
     pub fn new(device: &'a KeyboardDevice) -> Self {
         Self {
             device,
-            protocol: Mutex::new(None),
+            info: Default::default(),
         }
+    }
+
+    #[inline]
+    pub fn get_info(&self) -> Arc<VKDeviceInfo> {
+        Arc::clone(&self.info.lock().unwrap())
+    }
+
+    #[inline]
+    pub(crate) fn get_info_mut(&self) -> MutexGuard<'_, Arc<VKDeviceInfo>> {
+        self.info.lock().unwrap()
     }
 
     pub fn get_firmware_version(&self) -> ViaResult<String> {
@@ -66,7 +84,7 @@ impl<'a> ViaKeychronProtocol<'a> {
         Ok((payload[0], payload[1]))
     }
 
-    pub fn get_misc_protcol_version(&self) -> ViaResult<(u16, VKMiscFeatures)> {
+    pub fn get_misc_protocol_version(&self) -> ViaResult<(u16, VKMiscFeatures)> {
         let cmd = &VKMiscCommandId::MiscGetProtocolVer;
         let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
@@ -158,7 +176,7 @@ pub mod tests {
         let kbd = get_keyboard(&HID)?;
         let proto = ViaKeychronProtocol::new(&kbd);
 
-        let ret = proto.get_misc_protcol_version()?;
+        let ret = proto.get_misc_protocol_version()?;
         tracing::info!(misc_protocol_version = ?ret);
         let features = ret.1;
 

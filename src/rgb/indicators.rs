@@ -21,10 +21,9 @@
 */
 
 use bitflags::bitflags;
-use palette::{Hsv, Srgb};
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKRgbCommandId, ViaKeychronProtocol, ViaReportData};
+use crate::{VKCommandMaker, VKHsv, VKRgbCommandId, ViaKeychronProtocol, ViaReportData};
 
 bitflags! {
     #[derive(Debug)]
@@ -63,18 +62,12 @@ impl VKRgbIndicatorsConfig {
         self.data[1] = if value { 1 } else { 0 };
     }
 
-    pub fn get_color(&self) -> Hsv {
-        Hsv::new(
-            self.data[2] as f32 / 255.0 * 360.0,
-            self.data[3] as f32 / 255.0,
-            self.data[4] as f32 / 255.0,
-        )
+    pub fn get_color(&self) -> VKHsv {
+        VKHsv::try_from(&self.data[2..=4]).unwrap()
     }
 
-    pub fn set_color(&mut self, value: &Hsv) {
-        self.data[2] = (value.hue.into_positive_degrees() / 360.0 * 255.0).round() as u8;
-        self.data[3] = (value.saturation * 255.0).round() as u8;
-        self.data[4] = (value.value * 255.0).round() as u8;
+    pub fn set_color(&mut self, value: &VKHsv) {
+        value.serialize(&mut self.data[2..]).unwrap();
     }
 }
 
@@ -117,15 +110,5 @@ impl VKRgbIndicatorsTrait for ViaKeychronProtocol<'_> {
 
         cmd.check_reply(&resp)?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use palette::{Hsv, Srgb, convert::FromColorUnclamped};
-
-    #[test]
-    fn rgb_conv() {
-        // let value: Hsv<Srgb, u8> = Hsv::<Srgb, u8>::from_color_unclamped(palette::named::RED);
     }
 }

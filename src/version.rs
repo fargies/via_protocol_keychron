@@ -20,6 +20,8 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
+use std::sync::Arc;
+
 use via_protocol::{ViaError, ViaResult};
 
 use crate::{VKCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
@@ -52,7 +54,7 @@ pub struct VKProtocolVersion {
 }
 
 impl VKProtocolVersion {
-    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
         proto.get_protocol_version()
     }
 }
@@ -70,21 +72,24 @@ impl TryFrom<&ViaReportData> for VKProtocolVersion {
 }
 
 pub trait VKProtocolVersionTrait {
-    fn get_protocol_version(&self) -> ViaResult<VKProtocolVersion>;
+    fn get_protocol_version(&self) -> ViaResult<Arc<VKProtocolVersion>>;
 }
 
 impl VKProtocolVersionTrait for ViaKeychronProtocol<'_> {
-    fn get_protocol_version(&self) -> ViaResult<VKProtocolVersion> {
-        if let Some(proto) = *self.protocol.lock().unwrap() {
-            Ok(proto)
+    fn get_protocol_version(&self) -> ViaResult<Arc<VKProtocolVersion>> {
+        if let Some(proto) = self.get_info().protocol.as_ref() {
+            Ok(Arc::clone(proto))
         } else {
             VKProtocolVersion::try_from(
                 &self
                     .device
                     .raw_hid_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
             )
+            .map(Arc::new)
             .inspect(|proto| {
-                self.protocol.lock().unwrap().replace(*proto);
+                Arc::make_mut(&mut self.get_info_mut())
+                    .protocol
+                    .replace(Arc::clone(&proto));
             })
         }
     }
