@@ -27,7 +27,7 @@ mod command;
 pub use command::{VKCommand, VKCommandId, VKCommandMaker};
 
 mod version;
-pub use version::VKProtocolVersion;
+pub use version::*;
 
 mod features;
 pub use features::*;

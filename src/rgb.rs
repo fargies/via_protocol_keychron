@@ -103,6 +103,34 @@ impl VKCommandMaker for VKRgbCommandId {
     }
 }
 
+pub struct VKRgb {}
+
+impl VKRgb {
+    /// @brief save current config to EEPROM
+    pub fn save(proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        let cmd = &VKRgbCommandId::RgbSave;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        cmd.check_reply(&resp)?;
+        Ok(())
+    }
+
+    /// get device's led count
+    pub fn get_led_count(proto: &ViaKeychronProtocol) -> ViaResult<usize> {
+        if let Some(value) = proto.get_info().led_count {
+            Ok(value)
+        } else {
+            let cmd = &VKRgbCommandId::RgbGetLedCount;
+            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+            let value = cmd.check_reply(&resp)?[0] as usize;
+
+            Arc::make_mut(&mut proto.get_info_mut())
+                .led_count
+                .replace(value);
+            Ok(value)
+        }
+    }
+}
+
 pub trait VKRgbTrait:
     VKRgbProtocolVersionTrait + VKRgbIndicatorsTrait + VKRgbPerKeyTrait + VKRgbMixedTrait
 {
@@ -113,25 +141,11 @@ pub trait VKRgbTrait:
 
 impl VKRgbTrait for ViaKeychronProtocol<'_> {
     fn save_rgb(&self) -> ViaResult<()> {
-        let cmd = &VKRgbCommandId::RgbSave;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        cmd.check_reply(&resp)?;
-        Ok(())
+        VKRgb::save(self)
     }
 
     fn get_led_count(&self) -> ViaResult<usize> {
-        if let Some(value) = self.get_info().led_count {
-            Ok(value)
-        } else {
-            let cmd = &VKRgbCommandId::RgbGetLedCount;
-            let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-            let value = cmd.check_reply(&resp)?[0] as usize;
-
-            Arc::make_mut(&mut self.get_info_mut())
-                .led_count
-                .replace(value);
-            Ok(value)
-        }
+        VKRgb::get_led_count(self)
     }
 }
 
