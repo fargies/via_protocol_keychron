@@ -22,7 +22,7 @@
 
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKHsv, VKRgbCommandId, ViaKeychronProtocol, ViaReportData};
+use crate::{VKCommandMaker, VKHsv, VKRgbCommandId, VKRgbTrait, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(u8)]
@@ -37,13 +37,19 @@ pub enum VKRgbPerKeyType {
 impl VKRgbPerKeyType {
     /// @brief load [VKRgbPerKeyType] from device
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<VKRgbPerKeyType> {
-        proto.get_per_key_type()
+        let cmd = &VKRgbCommandId::PerKeyRgbGetType;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        Self::try_from(resp)
     }
 
     /// @brief send [VKRgbPerKeyType] to device
     /// @details use [VKRgb::save] to persist changes
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_per_key_type(self)
+        let cmd = &VKRgbCommandId::PerKeyRgbSetType;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[*self as u8]))?;
+
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 
@@ -79,31 +85,62 @@ pub struct VKRgbPerKeyConfig {
 impl VKRgbPerKeyConfig {
     pub const MAX_REQ_ITEMS: usize = 9;
 
-    pub fn load(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
-        proto.get_per_key_led_color(start, count)
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        let key_count = proto.get_led_count()?;
+        let cmd = &VKRgbCommandId::PerKeyRgbGetColor;
+
+        let mut ret = Self {
+            start: 0,
+            config: Vec::with_capacity(key_count)
+        };
+
+        let mut start = 0;
+        while start < key_count {
+            let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
+            let resp = proto.device.raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            let value = cmd.check_reply(&resp)?;
+            for i in 0..count {
+                ret.config.push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
+            }
+            start += count;
+        }
+        Ok(ret)
+    }
+
+    pub fn load_part(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
+        let cmd = &VKRgbCommandId::PerKeyRgbGetColor;
+        let mut ret = Self {
+            start,
+            config: Vec::with_capacity(count as usize)
+        };
+
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
+        let value = cmd.check_reply(&resp)?;
+        for i in 0..count as usize {
+            ret.config.push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
+        }
+        Ok(ret)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_per_key_led_color(self)
-    }
+        let cmd = &VKRgbCommandId::PerKeyRgbSetColor;
 
-    pub fn try_from(value: ViaReportData, start: u8, count: u8) -> ViaResult<Self> {
-        let value = VKRgbCommandId::PerKeyRgbGetColor.check_reply(&value)?;
-        if count > Self::MAX_REQ_ITEMS as u8 {
-            return Err(ViaError::Protocol(format!(
-                "invalid key-count for VKRgbPerKeyConfig: {count}"
-            )));
+        let mut data = Vec::with_capacity(2 + VKHsv::BYTE_SIZE * self.config.len().min(Self::MAX_REQ_ITEMS));
+        let mut start = 0;
+        while start < self.config.len() {
+            let count = (self.config.len() - start).min(Self::MAX_REQ_ITEMS);
+            data.clear();
+            data.push(start as u8 + self.start);
+            data.push(count as u8);
+            data.resize(2 + VKHsv::BYTE_SIZE * count, 0);
+            for (index, hsv) in self.config[start..start+count].iter().enumerate() {
+                hsv.serialize(&mut data[(2 + index * 3)..])?;
+            }
+            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            cmd.check_reply(&resp)?;
+            start += count;
         }
-
-        let mut ret = Self {
-            start,
-            config: Vec::with_capacity(count as usize),
-        };
-
-        for i in 0..count as usize {
-            ret.config.push(VKHsv::try_from(&value[i * 3..])?)
-        }
-        Ok(ret)
+        Ok(())
     }
 }
 
@@ -111,48 +148,25 @@ pub trait VKRgbPerKeyTrait {
     fn get_per_key_type(&self) -> ViaResult<VKRgbPerKeyType>;
     fn set_per_key_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()>;
 
-    fn get_per_key_led_color(&self, start: u8, count: u8) -> ViaResult<VKRgbPerKeyConfig>;
+    fn get_per_key_led_color(&self) -> ViaResult<VKRgbPerKeyConfig>;
     fn set_per_key_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()>;
 }
 
 impl VKRgbPerKeyTrait for ViaKeychronProtocol<'_> {
     fn get_per_key_type(&self) -> ViaResult<VKRgbPerKeyType> {
-        let cmd = &VKRgbCommandId::PerKeyRgbGetType;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKRgbPerKeyType::try_from(resp)
+        VKRgbPerKeyType::load(self)
     }
 
     fn set_per_key_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()> {
-        let cmd = &VKRgbCommandId::PerKeyRgbSetType;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[*value as u8]))?;
-
-        cmd.check_reply(&resp)?;
-        Ok(())
+        value.send(self)
     }
 
-    fn get_per_key_led_color(&self, start: u8, count: u8) -> ViaResult<VKRgbPerKeyConfig> {
-        let cmd = &VKRgbCommandId::PerKeyRgbGetColor;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
-        VKRgbPerKeyConfig::try_from(resp, start, count)
+    fn get_per_key_led_color(&self) -> ViaResult<VKRgbPerKeyConfig> {
+        VKRgbPerKeyConfig::load(self)
+
     }
 
     fn set_per_key_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()> {
-        let cmd = &VKRgbCommandId::PerKeyRgbSetColor;
-        if value.config.len() > VKRgbPerKeyConfig::MAX_REQ_ITEMS {
-            return Err(ViaError::Protocol(format!(
-                "too many VKRgbPerKeyConfig items, (max=9): {}",
-                value.config.len()
-            )));
-        }
-        let mut data = Vec::with_capacity(2 + 3 * value.config.len());
-        data.push(value.start);
-        data.push(value.config.len() as u8);
-        data.resize(data.len() + 3 * value.config.len(), 0);
-        for (index, hsv) in value.config.iter().enumerate() {
-            hsv.serialize(&mut data[(2 + index * 3)..])?;
-        }
-        let resp = self.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
-        cmd.check_reply(&resp)?;
-        Ok(())
+        value.send(self)
     }
 }

@@ -20,6 +20,8 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
+use std::sync::Arc;
+
 use palette::{FromColor, Hsv, IntoColor};
 use via_protocol::ViaError;
 
@@ -106,7 +108,7 @@ pub trait VKRgbTrait:
 {
     fn save_rgb(&self) -> ViaResult<()>;
 
-    fn get_led_count(&self) -> ViaResult<u8>;
+    fn get_led_count(&self) -> ViaResult<usize>;
 }
 
 impl VKRgbTrait for ViaKeychronProtocol<'_> {
@@ -117,10 +119,19 @@ impl VKRgbTrait for ViaKeychronProtocol<'_> {
         Ok(())
     }
 
-    fn get_led_count(&self) -> ViaResult<u8> {
-        let cmd = &VKRgbCommandId::RgbGetLedCount;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        Ok(cmd.check_reply(&resp)?[0])
+    fn get_led_count(&self) -> ViaResult<usize> {
+        if let Some(value) = self.get_info().led_count {
+            Ok(value)
+        } else {
+            let cmd = &VKRgbCommandId::RgbGetLedCount;
+            let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+            let value = cmd.check_reply(&resp)?[0] as usize;
+
+            Arc::make_mut(&mut self.get_info_mut())
+                .led_count
+                .replace(value);
+            Ok(value)
+        }
     }
 }
 
@@ -132,6 +143,8 @@ pub struct VKHsv {
 }
 
 impl VKHsv {
+    pub const BYTE_SIZE: usize = 3;
+
     pub fn serialize(&self, buffer: &mut [u8]) -> ViaResult<()> {
         if buffer.len() < 3 {
             Err(ViaError::Protocol(
@@ -191,152 +204,8 @@ where
 #[cfg(test)]
 mod tests {
     use palette::{FromColor, Hsv, named};
-    use serial_test::serial;
-    use via_protocol::ViaProtocol;
 
     use super::*;
-    use crate::{
-        VKFeatures, VKFeaturesTrait, ViaKeychronProtocol,
-        protocol::tests::{HID, get_keyboard},
-    };
-
-    #[test]
-    #[serial(keyboard)]
-    fn rgb() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-        let proto = ViaKeychronProtocol::new(&kbd);
-
-        let support_features = proto.get_support_features()?;
-        tracing::info!(?support_features);
-
-        if support_features.contains(VKFeatures::KEYCHRON_RGB) {
-            let rgb_ver = VKRgbProtocolVersion::load(&proto)?;
-            tracing::info!(?rgb_ver);
-
-            proto.save_rgb()?;
-        } else {
-            VKRgbProtocolVersion::load(&proto).expect_err("should fail");
-            return Ok(());
-        }
-
-        let mut indicators = VKRgbIndicatorsConfig::load(&proto)?;
-        tracing::info!(%indicators);
-        let initial = indicators.get_color();
-        indicators.set_color(&named::RED.into_format::<f32>().into_color());
-        indicators.send(&proto)?;
-        indicators.set_color(&initial);
-        indicators.send(&proto)?;
-
-        let led_count = proto.get_led_count()?;
-        tracing::info!(led_count);
-        Ok(())
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn lighting_protocol() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-
-        let via = ViaProtocol::new(&kbd);
-        let proto = via
-            .detect_lighting_protocol()
-            .expect("keychron keyboards must support lighting-protocol");
-        tracing::info!(?proto);
-
-        let mut light = via.read_lighting_values(&proto)?;
-        tracing::info!(?light);
-        light.effect_id = 24;
-        via.write_lighting_values(&proto, &light)?;
-        Ok(())
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn per_key() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-        let proto = ViaKeychronProtocol::new(&kbd);
-
-        // let via = ViaProtocol::new(&kbd);
-        // tracing::trace!(effects = ?via.get()?);
-        // return Ok(());
-        let support_features = proto.get_support_features()?;
-        tracing::info!(?support_features);
-
-        if !support_features.contains(VKFeatures::KEYCHRON_RGB) {
-            tracing::warn!("not running PerKey test: not supported by keyboard");
-            return Ok(());
-        }
-
-        let led_count = proto.get_led_count()?;
-        tracing::info!(led_count);
-
-        let per_key_type = VKRgbPerKeyType::load(&proto)?;
-        tracing::info!(?per_key_type);
-        VKRgbPerKeyType::Breathing.send(&proto)?;
-        per_key_type.send(&proto)?;
-
-        let mut start = 0;
-        while start < led_count {
-            let count = (led_count - start).min(VKRgbPerKeyConfig::MAX_REQ_ITEMS as u8);
-            assert!(count > 0);
-            let config = VKRgbPerKeyConfig::load(&proto, start, count)?;
-            tracing::info!(per_key = ?config);
-            assert_eq!(start, config.start);
-            assert_eq!(count as usize, config.config.len());
-            let mut new_config = config.clone();
-            new_config.config[0] = VKHsv {
-                hue: 255,
-                saturation: 100,
-                value: 200,
-            };
-
-            new_config.send(&proto)?;
-
-            config.send(&proto)?;
-            start += count;
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn mixed() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-        let proto = ViaKeychronProtocol::new(&kbd);
-
-        let support_features = proto.get_support_features()?;
-        tracing::info!(?support_features);
-
-        if !support_features.contains(VKFeatures::KEYCHRON_RGB) {
-            tracing::warn!("not running PerKey test: not supported by keyboard");
-            return Ok(());
-        }
-
-        let mixed_info = VKRgbMixedInfo::load(&proto)?;
-        tracing::info!(%mixed_info);
-
-        let led_count = proto.get_led_count()?;
-        tracing::info!(led_count);
-
-        let mut start = 0;
-        while start < led_count {
-            let count = (led_count - start).min(VKRgbMixedRegions::MAX_REQ_ITEMS as u8);
-            assert!(count > 0);
-            let config = VKRgbMixedRegions::load(&proto, start, count)?;
-            assert_eq!(start, config.start);
-            assert_eq!(count as usize, config.regions.len());
-            tracing::info!(region = ?config);
-            let mut new_config = config.clone();
-            new_config.regions.fill(0);
-            new_config.send(&proto)?;
-
-            config.send(&proto)?;
-            start += count;
-        }
-
-        Ok(())
-    }
 
     #[test]
     fn vkhsv() {

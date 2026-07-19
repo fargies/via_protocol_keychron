@@ -32,7 +32,9 @@ pub struct VKRgbProtocolVersion {
 
 impl VKRgbProtocolVersion {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_rgb_protocol_version()
+        let cmd = &VKRgbCommandId::RgbGetProtocolVer;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        Self::try_from(resp)
     }
 }
 
@@ -51,8 +53,6 @@ pub trait VKRgbProtocolVersionTrait {
 
 impl VKRgbProtocolVersionTrait for ViaKeychronProtocol<'_> {
     fn get_rgb_protocol_version(&self) -> ViaResult<VKRgbProtocolVersion> {
-        let cmd = &VKRgbCommandId::RgbGetProtocolVer;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKRgbProtocolVersion::try_from(resp)
+        VKRgbProtocolVersion::load(self)
     }
 }

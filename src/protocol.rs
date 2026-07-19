@@ -25,7 +25,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion, VKRgbMixedInfo, version::VKProtocolType,
+    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
+    VKRgbMixedInfo, version::VKProtocolType,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
@@ -35,13 +36,20 @@ pub struct ViaKeychronProtocol<'a> {
     pub device: &'a KeyboardDevice,
 
     /// @brief cached device information
-    pub info: Mutex<Arc<VKDeviceInfo>>
+    pub info: Mutex<Arc<VKDeviceInfo>>,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct VKDeviceInfo {
+    /// @brief device protocol information
+    /// @details fetched using [VKProtocolVersion::load]
     pub protocol: Option<Arc<VKProtocolVersion>>,
-    pub mixed_info: Option<Arc<VKRgbMixedInfo>>
+    /// @brief RgbMixed layers/effects info
+    /// @details fetched using [VKRgbMixedInfo::load]
+    pub mixed_info: Option<Arc<VKRgbMixedInfo>>,
+    /// @brief number of RGB leds on the device
+    /// @details fetched using [VKRgb::get_led_count]
+    pub led_count: Option<usize>,
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
@@ -129,7 +137,8 @@ pub mod tests {
 
     use super::*;
     use crate::{
-        VKDebounceConfig, VKDfuInfo, VKFeatures, VKLanguageLayout, VKNkroConfig, VKReportRateConfig, VKSnapClickConfig, VKWirelessLpmConfig,
+        VKDebounceConfig, VKDfuInfo, VKFeatures, VKLanguageLayout, VKNkroConfig,
+        VKReportRateConfig, VKSnapClickConfig, VKWirelessLpmConfig,
     };
     use hidapi::HidApi;
     use serial_test::serial;

@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKRgbCommandId, ViaKeychronProtocol, ViaReportData};
+use crate::{VKCommandMaker, VKRgbCommandId, VKRgbTrait, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, Clone)]
 pub struct VKRgbMixedInfo {
@@ -33,16 +33,26 @@ pub struct VKRgbMixedInfo {
 
 impl VKRgbMixedInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        proto.get_mixed_info()
+        if let Some(info) = proto.get_info().mixed_info.as_ref() {
+            Ok(Arc::clone(info))
+        } else {
+            let cmd = &VKRgbCommandId::MixedEffectRgbGetInfo;
+            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+            Self::try_from(resp).map(Arc::new).inspect(|info| {
+                Arc::make_mut(&mut proto.get_info_mut())
+                    .mixed_info
+                    .replace(Arc::clone(info));
+            })
+        }
     }
 
     /// @brief get number of layers for mixed mode
-    pub fn get_layers(&self) -> u8 {
+    pub fn get_region_count(&self) -> u8 {
         self.data[0]
     }
 
     /// @brief get number of effects per layer in mixed mode
-    pub fn get_effects_per_layer(&self) -> u8 {
+    pub fn get_effects_per_region(&self) -> u8 {
         self.data[1]
     }
 }
@@ -50,8 +60,8 @@ impl VKRgbMixedInfo {
 impl std::fmt::Display for VKRgbMixedInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VKRgbMixedInfo")
-            .field("layers", &self.get_layers())
-            .field("effects_per_layer", &self.get_effects_per_layer())
+            .field("layers", &self.get_region_count())
+            .field("effects_per_layer", &self.get_effects_per_region())
             .finish()
     }
 }
@@ -76,12 +86,50 @@ pub struct VKRgbMixedRegions {
 impl VKRgbMixedRegions {
     pub const MAX_REQ_ITEMS: usize = 28;
 
-    pub fn load(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
-        proto.get_mixed_regions(start, count)
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        let key_count = proto.get_led_count()?;
+        let cmd = &VKRgbCommandId::MixedEffectRgbGetRegions;
+
+        let mut ret = Self {
+            start: 0,
+            regions: Vec::with_capacity(key_count),
+        };
+        let mut start = 0;
+        while start < key_count {
+            let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
+            let resp = proto
+                .device
+                .raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            ret.regions.extend(&cmd.check_reply(&resp)?[0..count]);
+            start += count;
+        }
+        Ok(ret)
+    }
+
+    pub fn load_part(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
+        let cmd = &VKRgbCommandId::MixedEffectRgbGetRegions;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
+        Self::try_from(resp, start, count)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_mixed_regions(self)
+        let cmd = &VKRgbCommandId::MixedEffectRgbSetRegions;
+
+        let mut data =
+            Vec::with_capacity(2 + self.regions.len().min(VKRgbMixedRegions::MAX_REQ_ITEMS));
+        let mut start = 0;
+        while start < self.regions.len() {
+            let count = (self.regions.len() - start).min(Self::MAX_REQ_ITEMS);
+            data.clear();
+            data.push(self.start + start as u8);
+            data.push(count as u8);
+            data.extend(&self.regions[start..start + count]);
+            tracing::trace!(req = ?data);
+            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            cmd.check_reply(&resp)?;
+            start += count;
+        }
+        Ok(())
     }
 
     pub fn try_from(value: ViaReportData, start: u8, count: u8) -> ViaResult<Self> {
@@ -109,28 +157,73 @@ pub struct VKRgbMixedEffectList {
 impl VKRgbMixedEffectList {
     pub const MAX_REQ_ITEMS: usize = 3;
 
-    pub fn load(proto: &ViaKeychronProtocol, region: u8, start: u8, count: u8) -> ViaResult<Self> {
-        proto.get_mixed_effects(region, start, count)
+    pub fn load(proto: &ViaKeychronProtocol, region: u8) -> ViaResult<Self> {
+        let effects_count = VKRgbMixedInfo::load(proto)?.get_effects_per_region() as usize;
+        let cmd = &VKRgbCommandId::MixedEffectRgbGetEffectList;
+        let mut ret = Self {
+            region,
+            start: 0,
+            effects: Vec::with_capacity(effects_count),
+        };
+        let mut start = 0;
+        while start < effects_count {
+            let count = (effects_count - start).min(Self::MAX_REQ_ITEMS);
+            let resp =
+                proto
+                    .device
+                    .raw_hid_send(&cmd.to_req(&[region, start as u8, count as u8]))?;
+            let payload = cmd.check_reply(&resp)?;
+            for i in 0..count {
+                ret.effects.push(VKRgbMixedEffect::try_from(
+                    &payload[i * VKRgbMixedEffect::BYTE_SIZE..],
+                )?);
+            }
+            start += count;
+        }
+        Ok(ret)
     }
 
-    pub fn try_from(value: ViaReportData, region: u8, start: u8, count: u8) -> ViaResult<Self> {
-        if count > Self::MAX_REQ_ITEMS as u8 {
-            return Err(ViaError::Protocol(format!(
-                "invalid effects count for VKRgbMixedEffectList: {count}"
-            )));
-        }
-
-        let value = VKRgbCommandId::MixedEffectRgbSetEffectList.check_reply(&value)?;
+    pub fn load_part(proto: &ViaKeychronProtocol, region: u8, start: u8, count: u8) -> ViaResult<Self> {
+        let cmd = &VKRgbCommandId::MixedEffectRgbGetEffectList;
+        let resp = proto
+            .device
+            .raw_hid_send(&cmd.to_req(&[region, start, count]))?;
         let mut ret = Self {
             region,
             start,
             effects: Vec::with_capacity(count as usize),
         };
+        let payload = cmd.check_reply(&resp)?;
         for i in 0..count as usize {
-            ret.effects
-                .push(VKRgbMixedEffect::try_from(&value[i * 8..])?);
+            ret.effects.push(VKRgbMixedEffect::try_from(
+                &payload[i * VKRgbMixedEffect::BYTE_SIZE..],
+            )?);
         }
         Ok(ret)
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        let cmd = &VKRgbCommandId::MixedEffectRgbSetEffectList;
+        let mut data =
+            Vec::with_capacity(3 + VKRgbMixedEffect::BYTE_SIZE * self.effects.len().min(Self::MAX_REQ_ITEMS));
+
+        let mut start = 0;
+        while start < self.effects.len() {
+            let count = (self.effects.len() - start).min(Self::MAX_REQ_ITEMS);
+            data.clear();
+            data.push(self.region);
+            data.push(self.start + start as u8);
+            data.push(count as u8);
+            data.resize(3 + VKRgbMixedEffect::BYTE_SIZE * count, 0);
+            for i in 0..count {
+                self.effects[start + i].serialize(&mut data[3 + VKRgbMixedEffect::BYTE_SIZE * i..])?;
+            }
+            tracing::trace!(req = ?data);
+            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            cmd.check_reply(&resp)?;
+            start += count;
+        }
+        Ok(())
     }
 }
 
@@ -138,7 +231,7 @@ impl VKRgbMixedEffectList {
 pub struct VKRgbMixedEffect {
     pub effect: u8,
     pub hue: u8,
-    pub satuation: u8,
+    pub saturation: u8,
     pub speed: u8,
     pub time: u32,
 }
@@ -155,7 +248,7 @@ impl TryFrom<&[u8]> for VKRgbMixedEffect {
             Ok(Self {
                 effect: value[0],
                 hue: value[1],
-                satuation: value[2],
+                saturation: value[2],
                 speed: value[3],
                 time: u32::from_le_bytes(*value[4..8].as_array::<4>().unwrap()),
             })
@@ -163,69 +256,47 @@ impl TryFrom<&[u8]> for VKRgbMixedEffect {
     }
 }
 
+impl VKRgbMixedEffect {
+    pub const BYTE_SIZE: usize = 8;
+
+    pub fn serialize(&self, buffer: &mut [u8]) -> ViaResult<()> {
+        if buffer.len() < Self::BYTE_SIZE {
+            Err(ViaError::Protocol(
+                "buffer too small to serialize VKRgbMixedEffect".into(),
+            ))
+        } else {
+            buffer[0] = self.effect;
+            buffer[1] = self.hue;
+            buffer[2] = self.saturation;
+            buffer[3] = self.speed;
+            buffer[4..8].copy_from_slice(self.time.to_le_bytes().as_slice());
+        Ok(())
+        }
+
+    }
+}
+
 pub trait VKRgbMixedTrait {
     fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>>;
-    fn get_mixed_regions(&self, start: u8, count: u8) -> ViaResult<VKRgbMixedRegions>;
+    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions>;
     fn set_mixed_regions(&self, regions: &VKRgbMixedRegions) -> ViaResult<()>;
-    fn get_mixed_effects(
-        &self,
-        region: u8,
-        start: u8,
-        count: u8,
-    ) -> ViaResult<VKRgbMixedEffectList>;
+    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList>;
 }
 
 impl VKRgbMixedTrait for ViaKeychronProtocol<'_> {
     fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>> {
-        if let Some(info) = self.get_info().mixed_info.as_ref() {
-            Ok(Arc::clone(info))
-        } else {
-            let cmd = &VKRgbCommandId::MixedEffectRgbGetInfo;
-            let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-            VKRgbMixedInfo::try_from(resp)
-                .map(Arc::new)
-                .inspect(|info| {
-                    Arc::make_mut(&mut self.get_info_mut())
-                        .mixed_info
-                        .replace(Arc::clone(info));
-                })
-        }
+        VKRgbMixedInfo::load(self)
     }
 
-    fn get_mixed_regions(&self, start: u8, count: u8) -> ViaResult<VKRgbMixedRegions> {
-        let cmd = &VKRgbCommandId::MixedEffectRgbGetRegions;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
-        VKRgbMixedRegions::try_from(resp, start, count)
+    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions> {
+        VKRgbMixedRegions::load(self)
     }
 
     fn set_mixed_regions(&self, value: &VKRgbMixedRegions) -> ViaResult<()> {
-        let cmd = &VKRgbCommandId::MixedEffectRgbSetRegions;
-        if value.regions.len() > VKRgbMixedRegions::MAX_REQ_ITEMS {
-            return Err(ViaError::Protocol(format!(
-                "too many VKRgbMixedRegions items, (max=29): {}",
-                value.regions.len()
-            )));
-        }
-        let mut data = Vec::with_capacity(2 + value.regions.len());
-        data.push(value.start);
-        data.push(value.regions.len() as u8);
-        data.splice(2.., value.regions.iter().cloned());
-        tracing::trace!(req = ?data);
-        let resp = self.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
-        cmd.check_reply(&resp)?;
-        Ok(())
+        value.send(self)
     }
 
-    fn get_mixed_effects(
-        &self,
-        region: u8,
-        start: u8,
-        count: u8,
-    ) -> ViaResult<VKRgbMixedEffectList> {
-        let cmd = &VKRgbCommandId::MixedEffectRgbGetEffectList;
-        let resp = self
-            .device
-            .raw_hid_send(&cmd.to_req(&[region, start, count]))?;
-        VKRgbMixedEffectList::try_from(resp, region, start, count)
+    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList> {
+        VKRgbMixedEffectList::load(self, region)
     }
 }
