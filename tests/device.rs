@@ -25,4 +25,8 @@ mod rgb {
     mod mixed;
     mod per_key;
 }
+mod analog {
+    mod version;
+    mod profile;
+}
 mod common;

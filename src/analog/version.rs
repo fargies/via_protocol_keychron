@@ -20,42 +20,28 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-pub use protocol::{KEYCHRON_VENDOR_ID, ViaKeychronProtocol, discover_keyboards};
+use via_protocol::{ViaError, ViaResult};
 
-mod command;
-pub use command::{VKCommand, VKCommandId, VKCommandMaker};
+use crate::{VKAnalogCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
 
-mod version;
-pub use version::*;
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct VKAnalogProtocolVersion {
+    pub version: u8
+}
 
-mod features;
-pub use features::*;
+impl VKAnalogProtocolVersion {
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        let cmd = &VKAnalogCommandId::GetProtocolVersion;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        Self::try_from(resp)
+    }
+}
 
-mod misc;
-pub use misc::*;
+impl TryFrom<ViaReportData> for VKAnalogProtocolVersion {
+    type Error = ViaError;
 
-mod rgb;
-pub use rgb::*;
-
-mod analog;
-pub use analog::*;
-
-mod data;
-pub use data::{VKMiscFeatures, ViaReportData};
-
-pub use via_protocol::{KeyboardDevice, ViaError, ViaResult};
-
-#[cfg(test)]
-mod tests {
-    #[ctor::ctor(unsafe)]
-    fn setup() {
-        use tracing_subscriber::{
-            EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
-        };
-        Registry::default()
-            .with(EnvFilter::from_default_env())
-            .with(fmt::layer().with_test_writer())
-            .init();
+    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
+        let payload = VKAnalogCommandId::GetProtocolVersion.check_reply(&value)?;
+        Ok(Self { version: payload[0] })
     }
 }

@@ -20,42 +20,20 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-pub use protocol::{KEYCHRON_VENDOR_ID, ViaKeychronProtocol, discover_keyboards};
+use serial_test::serial;
+use via_protocol::ViaResult;
+use via_protocol_keychron::{VKAnalogProtocolVersion, ViaKeychronProtocol};
 
-mod command;
-pub use command::{VKCommand, VKCommandId, VKCommandMaker};
+use crate::common::*;
 
-mod version;
-pub use version::*;
+#[test]
+#[serial(keyboard)]
+fn load() -> ViaResult<()> {
+    let kbd = get_keyboard(&HID)?;
+    let proto = ViaKeychronProtocol::new(&kbd);
 
-mod features;
-pub use features::*;
+    let analog_version = VKAnalogProtocolVersion::load(&proto)?;
+    tracing::info!(?analog_version);
 
-mod misc;
-pub use misc::*;
-
-mod rgb;
-pub use rgb::*;
-
-mod analog;
-pub use analog::*;
-
-mod data;
-pub use data::{VKMiscFeatures, ViaReportData};
-
-pub use via_protocol::{KeyboardDevice, ViaError, ViaResult};
-
-#[cfg(test)]
-mod tests {
-    #[ctor::ctor(unsafe)]
-    fn setup() {
-        use tracing_subscriber::{
-            EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
-        };
-        Registry::default()
-            .with(EnvFilter::from_default_env())
-            .with(fmt::layer().with_test_writer())
-            .init();
-    }
+    Ok(())
 }

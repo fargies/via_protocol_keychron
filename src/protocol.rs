@@ -25,8 +25,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion,
-    VKRgbMixedInfo, version::VKProtocolType,
+    VKAnalogProfileInfo, VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion, VKRgbMixedInfo, version::VKProtocolType,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
@@ -50,6 +49,9 @@ pub struct VKDeviceInfo {
     /// @brief number of RGB leds on the device
     /// @details fetched using [VKRgb::get_led_count]
     pub led_count: Option<usize>,
+    /// @brief analog keyboards info
+    /// @details fetched using [VKAnalogProfileInfo::load]
+    pub analog_info: Option<Arc<VKAnalogProfileInfo>>
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
