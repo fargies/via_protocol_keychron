@@ -22,13 +22,15 @@
 
 use serial_test::serial;
 use via_protocol::ViaResult;
-use via_protocol_keychron::{VKAnalogProfile, VKAnalogProfileInfo, ViaKeychronProtocol};
+use via_protocol_keychron::{
+    VKAnalogKeyConfigMode, VKAnalogProfile, VKAnalogProfileInfo, ViaKeychronProtocol,
+};
 
 use crate::common::*;
 
 #[test]
 #[serial(keyboard)]
-fn load() -> ViaResult<()> {
+fn load_info() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
 
@@ -42,7 +44,6 @@ fn load() -> ViaResult<()> {
 fn select() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
-
     let info = VKAnalogProfileInfo::load(&proto)?;
 
     for profile in 0..info.get_profile_count() {
@@ -61,12 +62,31 @@ fn select() -> ViaResult<()> {
 
 #[test]
 #[serial(keyboard)]
-fn load_raw() -> ViaResult<()> {
+fn load_profile() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
-
-    let raw_profile = VKAnalogProfile::load_raw_profile(&proto, 0)?;
     let info = VKAnalogProfileInfo::load(&proto)?;
-    assert_eq!(raw_profile.len(), info.get_raw_profile_byte_size() as usize);
+
+    let profile = VKAnalogProfile::load(&proto, 0)?;
+    assert_eq!(
+        profile.data.len(),
+        info.get_raw_profile_byte_size() as usize
+    );
+
+    let key_config = profile.get_global_key_config()?;
+    tracing::info!("key_config={key_config} raw={:?}", key_config.data);
+    let mode = key_config.get_mode()?;
+
+    let key_config = profile.get_key_config(0)?;
+    tracing::info!("key_config={key_config} raw={:?}", key_config.data);
+    for i in 0..10 {
+        let key_config = profile.get_key_config(i)?;
+        tracing::info!(i, "key_config={key_config} raw={:?}", key_config.data);
+        // tracing::info!(i, "adv_modekey_config={key_config} raw={:?}", key_config.data);
+    }
+    assert!(
+        [VKAnalogKeyConfigMode::Rapid, VKAnalogKeyConfigMode::Regular].contains(&mode),
+        "invalid global mode: {mode:?}"
+    );
     Ok(())
 }

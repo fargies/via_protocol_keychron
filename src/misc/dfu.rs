@@ -79,7 +79,10 @@ pub struct VKDfuInfo {
 
 impl VKDfuInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_dfu_info()
+        proto
+            .device
+            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())
+            .and_then(Self::try_from)
     }
 }
 
@@ -98,11 +101,11 @@ fn parse_dfu_str(data: &[u8]) -> ViaResult<String> {
     }
 }
 
-impl TryFrom<&ViaReportData> for VKDfuInfo {
+impl TryFrom<ViaReportData> for VKDfuInfo {
     type Error = ViaError;
 
-    fn try_from(value: &ViaReportData) -> Result<Self, Self::Error> {
-        let value = VKMiscCommandId::DfuInfoGet.check_reply(value)?;
+    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
+        let value = VKMiscCommandId::DfuInfoGet.check_reply(&value)?;
         let mut ret = VKDfuInfo::default();
         let mut idx = 0;
 
@@ -131,19 +134,6 @@ impl TryFrom<&ViaReportData> for VKDfuInfo {
     }
 }
 
-pub trait VKDfuInfoTrait {
-    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo>;
-}
-
-impl VKDfuInfoTrait for ViaKeychronProtocol<'_> {
-    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo> {
-        let resp = self
-            .device
-            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())?;
-        VKDfuInfo::try_from(&resp)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::VKCommandId;
@@ -154,7 +144,7 @@ mod tests {
     fn parse() -> ViaResult<()> {
         let mut data = ViaReportData::default();
 
-        let info = VKDfuInfo::try_from(&data).expect_err("should fail");
+        let info = VKDfuInfo::try_from(data).expect_err("should fail");
         assert!(
             info.to_string().contains("corrupted cmd"),
             "invalid err: {}",
@@ -162,7 +152,7 @@ mod tests {
         );
         data[0] = VKCommandId::MiscCmdGroup as u8;
 
-        let info = VKDfuInfo::try_from(&data).expect_err("should fail");
+        let info = VKDfuInfo::try_from(data).expect_err("should fail");
         assert!(
             info.to_string().contains("corrupted sub-cmd"),
             "invalid err: {}",
@@ -171,25 +161,25 @@ mod tests {
 
         data[1] = VKMiscCommandId::DfuInfoGet as u8;
         // both type and name must be set
-        VKDfuInfo::try_from(&data).expect_err("should fail");
+        VKDfuInfo::try_from(data).expect_err("should fail");
 
         data[3] = VKDfuInfoType::ChipType as u8;
         data[4] = 1;
         data[5] = 42;
-        VKDfuInfo::try_from(&data).expect_err("should fail");
+        VKDfuInfo::try_from(data).expect_err("should fail");
         data[5] = VKDfuChipType::STM32 as u8;
-        VKDfuInfo::try_from(&data).expect_err("should fail");
+        VKDfuInfo::try_from(data).expect_err("should fail");
 
         data[6] = VKDfuInfoType::ChipName as u8;
         data[7] = 3;
         data[8] = b't';
         data[9] = b's';
         data[10] = b't';
-        let info = VKDfuInfo::try_from(&data)?;
+        let info = VKDfuInfo::try_from(data)?;
         assert_eq!(info.name.as_str(), "tst");
 
         data[11] = 44;
-        VKDfuInfo::try_from(&data).expect_err("should fail");
+        VKDfuInfo::try_from(data).expect_err("should fail");
         Ok(())
     }
 }

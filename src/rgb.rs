@@ -29,6 +29,9 @@ use crate::{
     VKCommand, VKCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData, ViaResult,
 };
 
+mod info;
+pub use info::*;
+
 mod version;
 pub use version::*;
 
@@ -62,6 +65,8 @@ pub enum VKRgbCommandId {
 }
 
 impl VKRgbCommandId {
+    pub const HEADER_BYTE_SIZE: usize = 3;
+
     /// Convenience function, checks reply returns payload if properly built
     #[tracing::instrument(level = "ERROR", err)]
     pub fn check_reply<'a>(&self, value: &'a ViaReportData) -> ViaResult<&'a [u8]> {
@@ -81,7 +86,7 @@ impl VKRgbCommandId {
                 value[2]
             )))
         } else {
-            Ok(&value[3..])
+            Ok(&value[Self::HEADER_BYTE_SIZE..])
         }
     }
 }
@@ -116,27 +121,34 @@ impl VKRgb {
 
     /// get device's led count
     pub fn get_led_count(proto: &ViaKeychronProtocol) -> ViaResult<usize> {
-        if let Some(value) = proto.get_info().led_count {
-            Ok(value)
-        } else {
-            let cmd = &VKRgbCommandId::RgbGetLedCount;
-            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-            let value = cmd.check_reply(&resp)?[0] as usize;
-
-            Arc::make_mut(&mut proto.get_info_mut())
-                .led_count
-                .replace(value);
-            Ok(value)
-        }
+        VKRgbInfo::load(proto).map(|info| info.led_count)
     }
 }
 
-pub trait VKRgbTrait:
-    VKRgbProtocolVersionTrait + VKRgbIndicatorsTrait + VKRgbPerKeyTrait + VKRgbMixedTrait
-{
+pub trait VKRgbTrait {
+    fn get_rgb_info(&self) -> ViaResult<Arc<VKRgbInfo>>;
+
     fn save_rgb(&self) -> ViaResult<()>;
 
     fn get_led_count(&self) -> ViaResult<usize>;
+
+    fn get_indicators(&self) -> ViaResult<VKRgbIndicatorsConfig>;
+
+    fn set_indicators(&self, value: &VKRgbIndicatorsConfig) -> ViaResult<()>;
+
+    fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>>;
+
+    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions>;
+
+    fn set_mixed_regions(&self, regions: &VKRgbMixedRegions) -> ViaResult<()>;
+
+    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList>;
+
+    fn get_pk_type(&self) -> ViaResult<VKRgbPerKeyType>;
+    fn set_pk_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()>;
+
+    fn get_pk_led_color(&self) -> ViaResult<VKRgbPerKeyConfig>;
+    fn set_pk_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()>;
 }
 
 impl VKRgbTrait for ViaKeychronProtocol<'_> {
@@ -146,6 +158,50 @@ impl VKRgbTrait for ViaKeychronProtocol<'_> {
 
     fn get_led_count(&self) -> ViaResult<usize> {
         VKRgb::get_led_count(self)
+    }
+
+    fn get_rgb_info(&self) -> ViaResult<Arc<VKRgbInfo>> {
+        VKRgbInfo::load(self)
+    }
+
+    fn get_indicators(&self) -> ViaResult<VKRgbIndicatorsConfig> {
+        VKRgbIndicatorsConfig::load(self)
+    }
+
+    fn set_indicators(&self, value: &VKRgbIndicatorsConfig) -> ViaResult<()> {
+        value.send(self)
+    }
+
+    fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>> {
+        VKRgbMixedInfo::load(self)
+    }
+
+    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions> {
+        VKRgbMixedRegions::load(self)
+    }
+
+    fn set_mixed_regions(&self, regions: &VKRgbMixedRegions) -> ViaResult<()> {
+        regions.send(self)
+    }
+
+    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList> {
+        VKRgbMixedEffectList::load(self, region)
+    }
+
+    fn get_pk_type(&self) -> ViaResult<VKRgbPerKeyType> {
+        VKRgbPerKeyType::load(self)
+    }
+
+    fn set_pk_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()> {
+        value.send(self)
+    }
+
+    fn get_pk_led_color(&self) -> ViaResult<VKRgbPerKeyConfig> {
+        VKRgbPerKeyConfig::load(self)
+    }
+
+    fn set_pk_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()> {
+        value.send(self)
     }
 }
 

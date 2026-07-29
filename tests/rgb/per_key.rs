@@ -23,8 +23,7 @@
 use serial_test::serial;
 use via_protocol::ViaResult;
 use via_protocol_keychron::{
-    VKFeatures, VKFeaturesTrait, VKHsv, VKRgbPerKeyConfig, VKRgbPerKeyType, VKRgbTrait,
-    ViaKeychronProtocol,
+    VKFeatures, VKHsv, VKRgbPerKeyConfig, VKRgbPerKeyType, VKRgbTrait, ViaKeychronProtocol,
 };
 
 use crate::common::*;

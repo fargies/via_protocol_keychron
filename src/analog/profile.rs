@@ -20,32 +20,35 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
-use via_protocol::{ViaError, ViaResult};
+use via_protocol::{VIA_REPORT_SIZE, ViaError, ViaResult};
 
+use super::VKAnalogKeyConfig;
 use crate::{VKAnalogCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct VKAnalogProfileInfo {
-    data: Vec<u8>,
+pub struct VKAnalogProfileInfo<'a> {
+    pub data: Cow<'a, [u8]>,
 }
 
-impl VKAnalogProfileInfo {
+impl VKAnalogProfileInfo<'static> {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        if let Some(info) = proto.get_info().analog_info.as_ref() {
-            Ok(Arc::clone(info))
+        if let Some(value) = proto.get_info().analog.as_ref() {
+            Ok(value.clone())
         } else {
             let cmd = &VKAnalogCommandId::GetProfilesInfo;
             let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
             Self::try_from(resp).map(Arc::new).inspect(|info| {
                 Arc::make_mut(&mut proto.get_info_mut())
-                    .analog_info
+                    .analog
                     .replace(Arc::clone(info));
             })
         }
     }
+}
 
+impl VKAnalogProfileInfo<'_> {
     /// @brief get current profile index
     pub fn get_current_profile(&self) -> u8 {
         self.data[0]
@@ -72,7 +75,7 @@ impl VKAnalogProfileInfo {
     }
 }
 
-impl std::fmt::Display for VKAnalogProfileInfo {
+impl std::fmt::Display for VKAnalogProfileInfo<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VKAnalogProfileInfo")
             .field("current", &self.get_current_profile())
@@ -84,32 +87,79 @@ impl std::fmt::Display for VKAnalogProfileInfo {
     }
 }
 
-impl TryFrom<ViaReportData> for VKAnalogProfileInfo {
+impl TryFrom<ViaReportData> for VKAnalogProfileInfo<'static> {
     type Error = ViaError;
 
     fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
         let payload = VKAnalogCommandId::GetProfilesInfo.check_reply(&value)?;
         Ok(VKAnalogProfileInfo {
-            data: payload.into(),
+            data: Cow::Owned(payload.into()),
         })
     }
 }
 
-pub struct VKAnalogProfile {}
+pub struct VKAnalogOkmcConfig<'a> {
+    pub data: Cow<'a, [u8]>,
+}
+
+pub struct VKAnalogSocdConfig<'a> {
+    pub data: Cow<'a, [u8]>,
+}
+
+pub struct VKAnalogProfile {
+    pub data: Vec<u8>,
+}
 
 impl VKAnalogProfile {
+    pub const MAX_REQ_RAW_BYTES: usize =
+        VIA_REPORT_SIZE - (VKAnalogCommandId::HEADER_BYTE_SIZE + 4/* args size */);
+
+    pub fn get_global_key_config<'a>(&'a self) -> ViaResult<VKAnalogKeyConfig<'a>> {
+        VKAnalogKeyConfig::try_from(&self.data[0..VKAnalogKeyConfig::BYTE_SIZE])
+    }
+    pub fn get_key_config<'a>(&'a self, index: usize) -> ViaResult<VKAnalogKeyConfig<'a>> {
+        let pos = (1 + index) * VKAnalogKeyConfig::BYTE_SIZE;
+        VKAnalogKeyConfig::try_from(&self.data[pos..pos + VKAnalogKeyConfig::BYTE_SIZE])
+    }
+    pub fn get_okmc_config<'a>(&'a self) -> ViaResult<VKAnalogOkmcConfig<'a>> {
+        todo!()
+    }
+    pub fn get_socd_config<'a>(&'a self) -> ViaResult<VKAnalogSocdConfig<'a>> {
+        todo!()
+    }
+    pub fn get_name(&self) -> ViaResult<String> {
+        todo!()
+    }
+
     /// @brief select the current profile
     pub fn select(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::SelectProfile;
         let resp = proto.device.raw_hid_send(&cmd.to_req(&[index]))?;
         cmd.check_reply(&resp)?;
-        if let Some(info) = Arc::make_mut(&mut proto.get_info_mut()).analog_info.as_mut() {
-            Arc::make_mut(info).data[0] = index;
+        if let Some(info) = Arc::make_mut(&mut proto.get_info_mut()).analog.as_mut() {
+            Arc::make_mut(info).data.to_mut()[0] = index;
         }
         Ok(())
     }
 
-    pub fn load_raw_profile(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<Vec<u8>> {
-        todo!()
+    pub fn load(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<VKAnalogProfile> {
+        let total_size = VKAnalogProfileInfo::load(proto)?.get_raw_profile_byte_size() as usize;
+        let cmd = &VKAnalogCommandId::GetProfileRaw;
+        let mut data = Vec::with_capacity(total_size);
+
+        let mut offset = 0;
+        while offset < total_size {
+            let size = Self::MAX_REQ_RAW_BYTES.min(total_size - offset);
+            let resp = proto.device.raw_hid_send(&cmd.to_req(&[
+                index,
+                (offset & 0xFF) as u8,
+                ((offset >> 8) & 0xFF) as u8,
+                size as u8,
+            ]))?;
+            let payload = cmd.check_reply(&resp)?;
+            data.extend_from_slice(&payload[4..4 + size]);
+            offset += size;
+        }
+        Ok(VKAnalogProfile { data })
     }
 }

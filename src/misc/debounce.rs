@@ -60,11 +60,18 @@ pub struct VKDebounceConfig {
 
 impl VKDebounceConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_debounce()
+        let cmd = &VKMiscCommandId::DebounceGet;
+        proto.device.raw_hid_send(&cmd.to_cmd()).and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_debounce(self)
+        let cmd = &VKMiscCommandId::DebounceSet;
+        let resp = proto
+            .device
+            .raw_hid_send(&cmd.to_req(&self.data))?;
+
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     pub fn get_type(&self) -> VKDebounceType {
@@ -100,30 +107,6 @@ impl TryFrom<ViaReportData> for VKDebounceConfig {
         let payload = VKMiscCommandId::DebounceGet.check_reply(&value)?;
         VKDebounceType::try_from(payload[0])?;
         Ok(VKDebounceConfig { data: payload.into() })
-    }
-}
-
-pub trait VKDebounceTrait {
-    fn get_debounce(&self) -> ViaResult<VKDebounceConfig>;
-
-    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()>;
-}
-
-impl VKDebounceTrait for ViaKeychronProtocol<'_> {
-    fn get_debounce(&self) -> ViaResult<VKDebounceConfig> {
-        let cmd = &VKMiscCommandId::DebounceGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKDebounceConfig::try_from(resp)
-    }
-
-    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::DebounceSet;
-        let resp = self
-            .device
-            .raw_hid_send(&cmd.to_req(&debounce.data))?;
-
-        cmd.check_reply(&resp)?;
-        Ok(())
     }
 }
 

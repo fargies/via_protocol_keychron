@@ -31,11 +31,19 @@ pub struct VKNkroConfig {
 
 impl VKNkroConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_nkro()
+        proto
+            .device
+            .raw_hid_send(&VKMiscCommandId::NkroGet.to_cmd())
+            .and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_nkro(self.is_enabled())
+        let cmd = &VKMiscCommandId::NkroSet;
+        let req = cmd.to_req(&[if self.is_enabled() { 1 } else { 0 }]);
+
+        let resp = proto.device.raw_hid_send(&req)?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -77,27 +85,5 @@ impl TryFrom<ViaReportData> for VKNkroConfig {
         Ok(VKNkroConfig {
             data: payload.into(),
         })
-    }
-}
-
-pub trait VKNkroTrait {
-    fn get_nkro(&self) -> ViaResult<VKNkroConfig>;
-    fn set_nkro(&self, value: bool) -> ViaResult<()>;
-}
-
-impl VKNkroTrait for ViaKeychronProtocol<'_> {
-    fn get_nkro(&self) -> ViaResult<VKNkroConfig> {
-        let cmd = &VKMiscCommandId::NkroGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKNkroConfig::try_from(resp)
-    }
-
-    fn set_nkro(&self, value: bool) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::NkroSet;
-        let req = cmd.to_req(&[if value { 1 } else { 0 }]);
-
-        let resp = self.device.raw_hid_send(&req)?;
-        cmd.check_reply(&resp)?;
-        Ok(())
     }
 }

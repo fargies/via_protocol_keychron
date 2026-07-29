@@ -26,7 +26,7 @@ use via_protocol::VIA_REPORT_SIZE;
 pub type ViaReportData = [u8; VIA_REPORT_SIZE];
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct VKMiscFeatures: u8 {
         const DFU_INFO            = 0b1;
         const LANGUAGE            = 0b10;

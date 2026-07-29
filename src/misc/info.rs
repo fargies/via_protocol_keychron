@@ -22,45 +22,38 @@
 
 use std::sync::Arc;
 
-use bitflags::bitflags;
 use via_protocol::ViaResult;
 
 use crate::{
-    VKCommandId, VKCommandMaker, VKProtocolVersion, ViaKeychronProtocol, version::VKProtocolType,
+    VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolType, VKProtocolVersion,
+    ViaKeychronProtocol,
 };
 
-bitflags! {
-    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-    pub struct VKFeatures: u16 {
-        const DEFAULT_LAYER    = 0b1;
-        const BLUETOOTH        = 0b10;
-        const P24G             = 0b100;
-        const ANALOG_MATRIX    = 0b1000;
-        const STATE_NOTIFY     = 0b1_0000;
-        const DYNAMIC_DEBOUNCE = 0b10_0000;
-        const SNAP_CLICK       = 0b100_0000;
-        const KEYCHRON_RGB     = 0b1000_0000;
-        const QUICK_START      = 0b1_0000_0000;
-        const NKRO             = 0b10_0000_0000;
-    }
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct VKMiscInfo {
+    pub protocol_version: u16,
+    pub features: VKMiscFeatures,
 }
 
-impl VKFeatures {
+impl VKMiscInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        if let Some(value) = proto.get_info().features.as_ref() {
+        if let Some(value) = proto.get_info().misc.as_ref() {
             Ok(value.clone())
         } else {
-            let cmd = &VKCommandId::GetSupportFeature;
+            let cmd = &VKMiscCommandId::MiscGetProtocolVer;
             let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-
             let payload = cmd.check_reply(&resp)?;
             let features = match VKProtocolVersion::load(proto)?.protocol {
-                VKProtocolType::Zmk => [payload[0], payload[1]],
-                VKProtocolType::Qmk => [payload[1], payload[2]],
+                VKProtocolType::Zmk => VKMiscFeatures::DEBOUNCE,
+                VKProtocolType::Qmk => VKMiscFeatures::from_bits_retain(payload[2]),
             };
-            let ret = Arc::new(VKFeatures::from_bits_retain(u16::from_le_bytes(features)));
+
+            let ret = Arc::new(Self {
+                protocol_version: u16::from_le_bytes([payload[0], payload[1]]),
+                features,
+            });
             Arc::make_mut(&mut proto.get_info_mut())
-                .features
+                .misc
                 .replace(ret.clone());
             Ok(ret)
         }

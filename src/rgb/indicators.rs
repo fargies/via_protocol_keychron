@@ -97,18 +97,3 @@ impl TryFrom<ViaReportData> for VKRgbIndicatorsConfig {
         })
     }
 }
-
-pub trait VKRgbIndicatorsTrait {
-    fn get_indicators_config(&self) -> ViaResult<VKRgbIndicatorsConfig>;
-    fn set_indicators_config(&self, value: &VKRgbIndicatorsConfig) -> ViaResult<()>;
-}
-
-impl VKRgbIndicatorsTrait for ViaKeychronProtocol<'_> {
-    fn get_indicators_config(&self) -> ViaResult<VKRgbIndicatorsConfig> {
-        VKRgbIndicatorsConfig::load(self)
-    }
-
-    fn set_indicators_config(&self, value: &VKRgbIndicatorsConfig) -> ViaResult<()> {
-        value.send(self)
-    }
-}

@@ -20,9 +20,11 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use via_protocol::{ViaError, ViaResult};
+use via_protocol::{VIA_REPORT_SIZE, ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKHsv, VKRgbCommandId, VKRgbTrait, ViaKeychronProtocol, ViaReportData};
+use crate::{
+    VKCommandMaker, VKHsv, VKRgbCommandId, VKRgbTrait, ViaKeychronProtocol, ViaReportData,
+};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(u8)]
@@ -83,7 +85,8 @@ pub struct VKRgbPerKeyConfig {
 }
 
 impl VKRgbPerKeyConfig {
-    pub const MAX_REQ_ITEMS: usize = 9;
+    pub const MAX_REQ_ITEMS: usize =
+        (VIA_REPORT_SIZE - VKRgbCommandId::HEADER_BYTE_SIZE) / VKHsv::BYTE_SIZE;
 
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         let key_count = proto.get_led_count()?;
@@ -91,16 +94,19 @@ impl VKRgbPerKeyConfig {
 
         let mut ret = Self {
             start: 0,
-            config: Vec::with_capacity(key_count)
+            config: Vec::with_capacity(key_count),
         };
 
         let mut start = 0;
         while start < key_count {
             let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
-            let resp = proto.device.raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            let resp = proto
+                .device
+                .raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
             let value = cmd.check_reply(&resp)?;
             for i in 0..count {
-                ret.config.push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
+                ret.config
+                    .push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
             }
             start += count;
         }
@@ -111,13 +117,14 @@ impl VKRgbPerKeyConfig {
         let cmd = &VKRgbCommandId::PerKeyRgbGetColor;
         let mut ret = Self {
             start,
-            config: Vec::with_capacity(count as usize)
+            config: Vec::with_capacity(count as usize),
         };
 
         let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
         let value = cmd.check_reply(&resp)?;
         for i in 0..count as usize {
-            ret.config.push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
+            ret.config
+                .push(VKHsv::try_from(&value[i * VKHsv::BYTE_SIZE..])?)
         }
         Ok(ret)
     }
@@ -125,7 +132,8 @@ impl VKRgbPerKeyConfig {
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKRgbCommandId::PerKeyRgbSetColor;
 
-        let mut data = Vec::with_capacity(2 + VKHsv::BYTE_SIZE * self.config.len().min(Self::MAX_REQ_ITEMS));
+        let mut data =
+            Vec::with_capacity(2 + VKHsv::BYTE_SIZE * self.config.len().min(Self::MAX_REQ_ITEMS));
         let mut start = 0;
         while start < self.config.len() {
             let count = (self.config.len() - start).min(Self::MAX_REQ_ITEMS);
@@ -133,7 +141,7 @@ impl VKRgbPerKeyConfig {
             data.push(start as u8 + self.start);
             data.push(count as u8);
             data.resize(2 + VKHsv::BYTE_SIZE * count, 0);
-            for (index, hsv) in self.config[start..start+count].iter().enumerate() {
+            for (index, hsv) in self.config[start..start + count].iter().enumerate() {
                 hsv.serialize(&mut data[(2 + index * 3)..])?;
             }
             let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
@@ -141,32 +149,5 @@ impl VKRgbPerKeyConfig {
             start += count;
         }
         Ok(())
-    }
-}
-
-pub trait VKRgbPerKeyTrait {
-    fn get_per_key_type(&self) -> ViaResult<VKRgbPerKeyType>;
-    fn set_per_key_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()>;
-
-    fn get_per_key_led_color(&self) -> ViaResult<VKRgbPerKeyConfig>;
-    fn set_per_key_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()>;
-}
-
-impl VKRgbPerKeyTrait for ViaKeychronProtocol<'_> {
-    fn get_per_key_type(&self) -> ViaResult<VKRgbPerKeyType> {
-        VKRgbPerKeyType::load(self)
-    }
-
-    fn set_per_key_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()> {
-        value.send(self)
-    }
-
-    fn get_per_key_led_color(&self) -> ViaResult<VKRgbPerKeyConfig> {
-        VKRgbPerKeyConfig::load(self)
-
-    }
-
-    fn set_per_key_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()> {
-        value.send(self)
     }
 }

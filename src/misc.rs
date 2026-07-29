@@ -20,28 +20,35 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use crate::{VKCommand, VKCommandId, VKCommandMaker, ViaError, ViaReportData, ViaResult};
+use std::sync::Arc;
+
+use crate::{
+    VKCommand, VKCommandId, VKCommandMaker, ViaError, ViaKeychronProtocol, ViaReportData, ViaResult,
+};
+
+mod info;
+pub use info::*;
 
 mod nkro;
-pub use nkro::{VKNkroConfig, VKNkroTrait};
+pub use nkro::VKNkroConfig;
 
 mod dfu;
-pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType, VKDfuInfoTrait};
+pub use dfu::{VKDfuChipType, VKDfuInfo, VKDfuInfoType};
 
 mod debounce;
-pub use debounce::{VKDebounceType, VKDebounceTrait, VKDebounceConfig};
+pub use debounce::{VKDebounceConfig, VKDebounceType};
 
 mod snap_click;
-pub use snap_click::{VKSnapClick, VKSnapClickType, VKSnapClickTrait, VKSnapClickConfig};
+pub use snap_click::{VKSnapClick, VKSnapClickConfig, VKSnapClickType};
 
 mod wireless_lpm;
-pub use wireless_lpm::{VKWirelessLpmConfig, VKWirelessLpmTrait};
+pub use wireless_lpm::VKWirelessLpmConfig;
 
 mod report_rate;
-pub use report_rate::{VKReportRateConfig, VKReportRateTrait};
+pub use report_rate::VKReportRateConfig;
 
 mod language;
-pub use language::{VKLanguageLayout};
+pub use language::VKLanguageLayout;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -68,6 +75,8 @@ pub enum VKMiscCommandId {
 }
 
 impl VKMiscCommandId {
+    pub const HEADER_BYTE_SIZE: usize = 3;
+
     /// Convenience function, checks reply returns payload if properly built
     #[tracing::instrument(level = "ERROR", err)]
     pub fn check_reply<'a>(&self, value: &'a ViaReportData) -> ViaResult<&'a [u8]> {
@@ -87,7 +96,7 @@ impl VKMiscCommandId {
                 value[2]
             )))
         } else {
-            Ok(&value[3..])
+            Ok(&value[Self::HEADER_BYTE_SIZE..])
         }
     }
 }
@@ -106,5 +115,105 @@ impl VKCommandMaker for VKMiscCommandId {
         let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
         ret.report[3..3 + copy_len].copy_from_slice(&data[..copy_len]);
         ret
+    }
+}
+
+pub trait VKMiscTrait {
+    fn get_misc_info(&self) -> ViaResult<Arc<VKMiscInfo>>;
+
+    fn get_debounce(&self) -> ViaResult<VKDebounceConfig>;
+
+    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()>;
+
+    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo>;
+
+    fn get_language(&self) -> ViaResult<VKLanguageLayout>;
+
+    fn set_language(&self, layout: &VKLanguageLayout) -> ViaResult<()>;
+
+    fn get_nkro(&self) -> ViaResult<VKNkroConfig>;
+
+    fn set_nkro(&self, value: &VKNkroConfig) -> ViaResult<()>;
+
+    fn get_report_rate(&self) -> ViaResult<VKReportRateConfig>;
+
+    fn set_report_rate(&self, config: &VKReportRateConfig) -> ViaResult<()>;
+
+    fn get_snap_click_count(&self) -> ViaResult<u8>;
+
+    fn get_snap_click(&self) -> ViaResult<VKSnapClickConfig>;
+
+    fn set_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()>;
+
+    fn save_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()>;
+
+    fn get_wireless_lpm(&self) -> ViaResult<VKWirelessLpmConfig>;
+
+    fn set_wireless_lpm(&self, config: &VKWirelessLpmConfig) -> ViaResult<()>;
+}
+
+impl VKMiscTrait for ViaKeychronProtocol<'_> {
+    fn get_misc_info(&self) -> ViaResult<Arc<VKMiscInfo>> {
+        VKMiscInfo::load(self)
+    }
+
+    fn get_debounce(&self) -> ViaResult<VKDebounceConfig> {
+        VKDebounceConfig::load(self)
+    }
+
+    fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()> {
+        debounce.send(self)
+    }
+
+    fn get_dfu_info(&self) -> ViaResult<VKDfuInfo> {
+        VKDfuInfo::load(self)
+    }
+
+    fn get_language(&self) -> ViaResult<VKLanguageLayout> {
+        VKLanguageLayout::load(self)
+    }
+
+    fn set_language(&self, layout: &VKLanguageLayout) -> ViaResult<()> {
+        layout.save(self)
+    }
+
+    fn get_nkro(&self) -> ViaResult<VKNkroConfig> {
+        VKNkroConfig::load(self)
+    }
+
+    fn set_nkro(&self, value: &VKNkroConfig) -> ViaResult<()> {
+        value.send(self)
+    }
+
+    fn get_report_rate(&self) -> ViaResult<VKReportRateConfig> {
+        VKReportRateConfig::load(self)
+    }
+
+    fn set_report_rate(&self, config: &VKReportRateConfig) -> ViaResult<()> {
+        config.send(self)
+    }
+
+    fn get_snap_click_count(&self) -> ViaResult<u8> {
+        VKSnapClickConfig::count(self)
+    }
+
+    fn get_snap_click(&self) -> ViaResult<VKSnapClickConfig> {
+        VKSnapClickConfig::load(self)
+    }
+
+    fn set_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()> {
+        config.send(self)
+    }
+
+    fn save_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()> {
+        config.save(self)
+    }
+
+    fn get_wireless_lpm(&self) -> ViaResult<VKWirelessLpmConfig> {
+        VKWirelessLpmConfig::load(self)
+    }
+
+    fn set_wireless_lpm(&self, config: &VKWirelessLpmConfig) -> ViaResult<()> {
+        config.send(self)
     }
 }

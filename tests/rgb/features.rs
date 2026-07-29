@@ -26,10 +26,7 @@ use via_protocol::{ViaProtocol, ViaResult};
 
 use crate::common::*;
 
-use via_protocol_keychron::{
-    VKFeatures, VKFeaturesTrait, VKRgbIndicatorsConfig, VKRgbProtocolVersion, VKRgbTrait,
-    ViaKeychronProtocol,
-};
+use via_protocol_keychron::{VKFeatures, VKRgbTrait, ViaKeychronProtocol};
 
 #[test]
 #[serial(keyboard)]
@@ -41,22 +38,22 @@ fn rgb() -> ViaResult<()> {
     tracing::info!(?support_features);
 
     if support_features.contains(VKFeatures::KEYCHRON_RGB) {
-        let rgb_ver = VKRgbProtocolVersion::load(&proto)?;
-        tracing::info!(?rgb_ver);
+        let rgb_info = proto.get_rgb_info()?;
+        tracing::info!(?rgb_info);
 
         proto.save_rgb()?;
     } else {
-        VKRgbProtocolVersion::load(&proto).expect_err("should fail");
+        proto.get_rgb_info().expect_err("should fail");
         return Ok(());
     }
 
-    let mut indicators = VKRgbIndicatorsConfig::load(&proto)?;
+    let mut indicators = proto.get_indicators()?;
     tracing::info!(%indicators);
     let initial = indicators.get_color();
     indicators.set_color(&named::RED.into_format::<f32>().into_color());
-    indicators.send(&proto)?;
+    proto.set_indicators(&indicators)?;
     indicators.set_color(&initial);
-    indicators.send(&proto)?;
+    proto.set_indicators(&indicators)?;
 
     let led_count = proto.get_led_count()?;
     tracing::info!(led_count);

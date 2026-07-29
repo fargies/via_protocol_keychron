@@ -25,7 +25,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKAnalogProfileInfo, VKCommandId, VKCommandMaker, VKMiscCommandId, VKMiscFeatures, VKProtocolVersion, VKRgbMixedInfo, version::VKProtocolType,
+    VKAnalogProfileInfo, VKCommandId, VKCommandMaker, VKFeatures, VKMiscInfo, VKProtocolVersion,
+    VKRgbInfo,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
@@ -43,15 +44,22 @@ pub struct VKDeviceInfo {
     /// @brief device protocol information
     /// @details fetched using [VKProtocolVersion::load]
     pub protocol: Option<Arc<VKProtocolVersion>>,
+
+    pub firmware_version: Option<Arc<String>>,
+
+    pub features: Option<Arc<VKFeatures>>,
+
+    /// @brief Misc protocol information
+    /// @details fetched using [VKMiscInfo::load]
+    pub misc: Option<Arc<VKMiscInfo>>,
+
     /// @brief RgbMixed layers/effects info
     /// @details fetched using [VKRgbMixedInfo::load]
-    pub mixed_info: Option<Arc<VKRgbMixedInfo>>,
-    /// @brief number of RGB leds on the device
-    /// @details fetched using [VKRgb::get_led_count]
-    pub led_count: Option<usize>,
+    pub rgb: Option<Arc<VKRgbInfo>>,
+
     /// @brief analog keyboards info
     /// @details fetched using [VKAnalogProfileInfo::load]
-    pub analog_info: Option<Arc<VKAnalogProfileInfo>>
+    pub analog: Option<Arc<VKAnalogProfileInfo<'static>>>,
 }
 
 impl<'a> ViaKeychronProtocol<'a> {
@@ -62,9 +70,21 @@ impl<'a> ViaKeychronProtocol<'a> {
         }
     }
 
+    /// @brief direct access to [VKDeviceInfo]
+    /// @details info may not be loaded (yet), see [ViaKeychronProtocol::load_info]
     #[inline]
     pub fn get_info(&self) -> Arc<VKDeviceInfo> {
         Arc::clone(&self.info.lock().unwrap())
+    }
+
+    pub fn load_info(&self) -> ViaResult<Arc<VKDeviceInfo>> {
+        VKProtocolVersion::load(self)?;
+        self.get_firmware_version()?;
+        VKFeatures::load(self)?;
+        VKMiscInfo::load(self)?;
+        VKRgbInfo::load(self)?;
+        VKAnalogProfileInfo::load(self)?;
+        Ok(self.get_info())
     }
 
     #[inline]
@@ -72,18 +92,31 @@ impl<'a> ViaKeychronProtocol<'a> {
         self.info.lock().unwrap()
     }
 
-    pub fn get_firmware_version(&self) -> ViaResult<String> {
-        let cmd = &VKCommandId::GetFirmwareVersion;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        let payload = cmd.check_reply(&resp)?;
-        str::from_utf8(
-            &payload[..payload
-                .iter()
-                .position(|&c| c == b'\0')
-                .unwrap_or(resp.len())],
-        )
-        .map_err(|e| ViaError::Protocol(format!("failed to parse firmware version: {e}")))
-        .map(|r| r.to_string())
+    pub fn get_support_features(&self) -> ViaResult<Arc<VKFeatures>> {
+        VKFeatures::load(self)
+    }
+
+    pub fn get_firmware_version(&self) -> ViaResult<Arc<String>> {
+        if let Some(value) = self.get_info().firmware_version.as_ref() {
+            Ok(value.clone())
+        } else {
+            let cmd = &VKCommandId::GetFirmwareVersion;
+            let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+            let payload = cmd.check_reply(&resp)?;
+            str::from_utf8(
+                &payload[..payload
+                    .iter()
+                    .position(|&c| c == b'\0')
+                    .unwrap_or(resp.len())],
+            )
+            .map_err(|e| ViaError::Protocol(format!("failed to parse firmware version: {e}")))
+            .map(|r| Arc::new(r.to_string()))
+            .inspect(|p| {
+                Arc::make_mut(&mut self.get_info_mut())
+                    .firmware_version
+                    .replace(Arc::clone(p));
+            })
+        }
     }
 
     /// @returns `(default_layer_state, layer_state)`
@@ -92,18 +125,6 @@ impl<'a> ViaKeychronProtocol<'a> {
         let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
         Ok((payload[0], payload[1]))
-    }
-
-    pub fn get_misc_protocol_version(&self) -> ViaResult<(u16, VKMiscFeatures)> {
-        let cmd = &VKMiscCommandId::MiscGetProtocolVer;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        let payload = cmd.check_reply(&resp)?;
-        let features = match VKProtocolVersion::load(self)?.protocol {
-            VKProtocolType::Zmk => VKMiscFeatures::DEBOUNCE,
-            VKProtocolType::Qmk => VKMiscFeatures::from_bits_retain(payload[2]),
-        };
-
-        Ok((u16::from_le_bytes([payload[0], payload[1]]), features))
     }
 }
 
@@ -131,130 +152,4 @@ pub fn discover_keyboards(api: &hidapi::HidApi) -> Vec<KeyboardInfo> {
     }
 
     keyboards
-}
-
-#[cfg(test)]
-pub mod tests {
-    use std::sync::LazyLock;
-
-    use super::*;
-    use crate::{
-        VKDebounceConfig, VKDfuInfo, VKFeatures, VKLanguageLayout, VKNkroConfig,
-        VKReportRateConfig, VKSnapClickConfig, VKWirelessLpmConfig,
-    };
-    use hidapi::HidApi;
-    use serial_test::serial;
-    use via_protocol::{KeyboardDevice, ViaResult};
-
-    pub static HID: LazyLock<HidApi> =
-        LazyLock::new(|| HidApi::new().expect("failed to open hidapi"));
-
-    pub fn get_keyboard(api: &HidApi) -> ViaResult<KeyboardDevice> {
-        let keyboards = discover_keyboards(api);
-        assert!(!keyboards.is_empty());
-        KeyboardDevice::open(api, keyboards.first().unwrap().clone())
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn connect() -> ViaResult<()> {
-        get_keyboard(&HID).and(Ok(()))
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn info() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-        let proto = ViaKeychronProtocol::new(&kbd);
-
-        let ret = VKProtocolVersion::load(&proto)?;
-        tracing::info!(protocol_version = ?ret);
-
-        let ret = proto.get_firmware_version()?;
-        tracing::info!(firmware_version = ?ret);
-
-        let support_features = VKFeatures::load(&proto)?;
-        tracing::info!(?support_features);
-
-        let ret = proto.get_default_layer()?;
-        tracing::info!(default_layer = ?ret);
-        Ok(())
-    }
-
-    #[test]
-    #[serial(keyboard)]
-    fn misc() -> ViaResult<()> {
-        let kbd = get_keyboard(&HID)?;
-        let proto = ViaKeychronProtocol::new(&kbd);
-
-        let ret = proto.get_misc_protocol_version()?;
-        tracing::info!(misc_protocol_version = ?ret);
-        let features = ret.1;
-
-        if features.contains(VKMiscFeatures::DFU_INFO) {
-            let dfu_info = VKDfuInfo::load(&proto)?;
-            tracing::info!(?dfu_info);
-        } else {
-            VKDfuInfo::load(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::LANGUAGE) {
-            let ret = VKLanguageLayout::load(&proto)?;
-            tracing::info!(language = ?ret);
-            ret.save(&proto)?;
-        } else {
-            VKLanguageLayout::load(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::DEBOUNCE) {
-            let debounce = VKDebounceConfig::load(&proto)?;
-            tracing::info!(%debounce);
-            tracing::trace!(?debounce);
-            debounce.send(&proto)?;
-        } else {
-            VKDebounceConfig::load(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::SNAP_CLICK) {
-            let snap_click_count = VKSnapClickConfig::count(&proto)?;
-            tracing::info!(snap_click_count);
-            assert!(snap_click_count >= 9);
-            let snaps = VKSnapClickConfig::load(0, 9, &proto)?;
-            assert_eq!(snaps.config.len(), 9);
-            tracing::info!(%snaps);
-            tracing::trace!(?snaps);
-            snaps.send(&proto)?;
-            snaps.save(&proto)?;
-        } else {
-            VKSnapClickConfig::count(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::WIRELESS_LPM) {
-            let wireless_lpm = VKWirelessLpmConfig::load(&proto)?;
-            tracing::info!(%wireless_lpm);
-            tracing::trace!(?wireless_lpm);
-            wireless_lpm.send(&proto)?;
-        } else {
-            VKWirelessLpmConfig::load(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::REPORT_RATE) {
-            let report_rate = VKReportRateConfig::load(&proto)?;
-            tracing::info!(%report_rate);
-            tracing::trace!(?report_rate);
-            report_rate.send(&proto)?;
-        } else {
-            VKReportRateConfig::load(&proto).expect_err("should fail");
-        }
-
-        if features.contains(VKMiscFeatures::NKRO) {
-            let nkro = VKNkroConfig::load(&proto)?;
-            tracing::info!(%nkro);
-            tracing::trace!(?nkro);
-            nkro.send(&proto)?;
-        } else {
-            VKNkroConfig::load(&proto).expect_err("should fail");
-        }
-        Ok(())
-    }
 }

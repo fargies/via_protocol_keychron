@@ -20,32 +20,34 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::sync::Arc;
+use serial_test::serial;
 
-use via_protocol::{ViaError, ViaResult};
+use crate::common::*;
 
-use crate::{VKRgbCommandId, VKRgbInfo, ViaKeychronProtocol, ViaReportData};
+use via_protocol_keychron::{VKFeatures, VKProtocolVersion, ViaKeychronProtocol, ViaResult};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct VKRgbProtocolVersion {
-    pub major: u8,
-    pub minor: u8,
+#[test]
+#[serial(keyboard)]
+fn connect() -> ViaResult<()> {
+    get_keyboard(&HID).and(Ok(()))
 }
 
-impl VKRgbProtocolVersion {
-    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        VKRgbInfo::load(proto).map(|info| info.protocol_version.clone())
-    }
-}
+#[test]
+#[serial(keyboard)]
+fn info() -> ViaResult<()> {
+    let kbd = get_keyboard(&HID)?;
+    let proto = ViaKeychronProtocol::new(&kbd);
 
-impl TryFrom<ViaReportData> for VKRgbProtocolVersion {
-    type Error = ViaError;
+    let ret = VKProtocolVersion::load(&proto)?;
+    tracing::info!(protocol_version = ?ret);
 
-    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
-        let payload = VKRgbCommandId::RgbGetProtocolVer.check_reply(&value)?;
-        Ok(Self {
-            major: payload[0],
-            minor: payload[1],
-        })
-    }
+    let ret = proto.get_firmware_version()?;
+    tracing::info!(firmware_version = ?ret);
+
+    let support_features = VKFeatures::load(&proto)?;
+    tracing::info!(?support_features);
+
+    let ret = proto.get_default_layer()?;
+    tracing::info!(default_layer = ?ret);
+    Ok(())
 }

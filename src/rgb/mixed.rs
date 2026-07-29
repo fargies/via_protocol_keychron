@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKRgbCommandId, VKRgbTrait, ViaKeychronProtocol, ViaReportData};
+use crate::{VKCommandMaker, VKRgbCommandId, VKRgbInfo, ViaKeychronProtocol, ViaReportData, VKRgbTrait};
 
 #[derive(Debug, Clone)]
 pub struct VKRgbMixedInfo {
@@ -33,17 +33,7 @@ pub struct VKRgbMixedInfo {
 
 impl VKRgbMixedInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        if let Some(info) = proto.get_info().mixed_info.as_ref() {
-            Ok(Arc::clone(info))
-        } else {
-            let cmd = &VKRgbCommandId::MixedEffectRgbGetInfo;
-            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-            Self::try_from(resp).map(Arc::new).inspect(|info| {
-                Arc::make_mut(&mut proto.get_info_mut())
-                    .mixed_info
-                    .replace(Arc::clone(info));
-            })
-        }
+        VKRgbInfo::load(proto).map(|info| Arc::clone(&info.mixed))
     }
 
     /// @brief get number of layers for mixed mode
@@ -273,30 +263,5 @@ impl VKRgbMixedEffect {
         Ok(())
         }
 
-    }
-}
-
-pub trait VKRgbMixedTrait {
-    fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>>;
-    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions>;
-    fn set_mixed_regions(&self, regions: &VKRgbMixedRegions) -> ViaResult<()>;
-    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList>;
-}
-
-impl VKRgbMixedTrait for ViaKeychronProtocol<'_> {
-    fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>> {
-        VKRgbMixedInfo::load(self)
-    }
-
-    fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions> {
-        VKRgbMixedRegions::load(self)
-    }
-
-    fn set_mixed_regions(&self, value: &VKRgbMixedRegions) -> ViaResult<()> {
-        value.send(self)
-    }
-
-    fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList> {
-        VKRgbMixedEffectList::load(self, region)
     }
 }

@@ -33,11 +33,18 @@ pub struct VKReportRateConfig {
 
 impl VKReportRateConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_report_rate()
+        proto
+            .device
+            .raw_hid_send(&VKMiscCommandId::ReportRateGet.to_cmd())
+            .and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_report_rate(self)
+        let cmd = &VKMiscCommandId::ReportRateSet;
+
+        let resp = proto.device.raw_hid_send(&cmd.to_req(self.data.as_ref()))?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     pub fn get_div(&self) -> u8 {
@@ -62,28 +69,8 @@ impl TryFrom<ViaReportData> for VKReportRateConfig {
 
     fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
         let payload = VKMiscCommandId::ReportRateGet.check_reply(&value)?;
-        Ok(VKReportRateConfig { data: payload.into() })
-    }
-}
-
-pub trait VKReportRateTrait {
-    fn get_report_rate(&self) -> ViaResult<VKReportRateConfig>;
-    fn set_report_rate(&self, config: &VKReportRateConfig) -> ViaResult<()>;
-}
-
-impl VKReportRateTrait for ViaKeychronProtocol<'_> {
-    fn get_report_rate(&self) -> ViaResult<VKReportRateConfig> {
-        let cmd = &VKMiscCommandId::ReportRateGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKReportRateConfig::try_from(resp)
-    }
-
-    fn set_report_rate(&self, config: &VKReportRateConfig) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::ReportRateSet;
-        let req = cmd.to_req(config.data.as_ref());
-
-        let resp = self.device.raw_hid_send(&req)?;
-        cmd.check_reply(&resp)?;
-        Ok(())
+        Ok(VKReportRateConfig {
+            data: payload.into(),
+        })
     }
 }

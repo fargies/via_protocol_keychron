@@ -20,6 +20,10 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
+mod protocol {
+    mod info;
+    mod misc;
+}
 mod rgb {
     mod features;
     mod mixed;

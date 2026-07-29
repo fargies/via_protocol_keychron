@@ -33,11 +33,19 @@ pub struct VKWirelessLpmConfig {
 
 impl VKWirelessLpmConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_wireless_lpm()
+        proto
+            .device
+            .raw_hid_send(&VKMiscCommandId::WirelessLpmGet.to_cmd())
+            .and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_wireless_lpm(self)
+        let cmd = &VKMiscCommandId::WirelessLpmSet;
+        let req = cmd.to_req(self.data.as_ref());
+
+        let resp = proto.device.raw_hid_send(&req)?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     pub fn get_backlit_disable_time(&self) -> u16 {
@@ -74,27 +82,5 @@ impl TryFrom<ViaReportData> for VKWirelessLpmConfig {
         Ok(VKWirelessLpmConfig {
             data: payload.into(),
         })
-    }
-}
-
-pub trait VKWirelessLpmTrait {
-    fn get_wireless_lpm(&self) -> ViaResult<VKWirelessLpmConfig>;
-    fn set_wireless_lpm(&self, config: &VKWirelessLpmConfig) -> ViaResult<()>;
-}
-
-impl VKWirelessLpmTrait for ViaKeychronProtocol<'_> {
-    fn get_wireless_lpm(&self) -> ViaResult<VKWirelessLpmConfig> {
-        let cmd = &VKMiscCommandId::WirelessLpmGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        VKWirelessLpmConfig::try_from(resp)
-    }
-
-    fn set_wireless_lpm(&self, config: &VKWirelessLpmConfig) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::WirelessLpmSet;
-        let req = cmd.to_req(config.data.as_ref());
-
-        let resp = self.device.raw_hid_send(&req)?;
-        cmd.check_reply(&resp)?;
-        Ok(())
     }
 }

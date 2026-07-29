@@ -20,7 +20,7 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use via_protocol::{ViaError, ViaResult};
+use via_protocol::{VIA_REPORT_SIZE, ViaError, ViaResult};
 
 use crate::{VKCommandMaker, VKMiscCommandId, ViaKeychronProtocol, ViaReportData};
 
@@ -55,6 +55,10 @@ pub struct VKSnapClick {
     pub keycode: [u8; 2],
 }
 
+impl VKSnapClick {
+    pub const BYTE_SIZE: usize = 3;
+}
+
 impl TryFrom<&[u8]> for VKSnapClick {
     type Error = ViaError;
 
@@ -79,20 +83,67 @@ pub struct VKSnapClickConfig {
 }
 
 impl VKSnapClickConfig {
-    pub fn load(start: u8, count: u8, proto: &ViaKeychronProtocol) -> ViaResult<Self> {
-        proto.get_snap_click(start, count)
+    pub const MAX_REQ_ITEMS: usize = (VIA_REPORT_SIZE - VKMiscCommandId::HEADER_BYTE_SIZE) / VKSnapClick::BYTE_SIZE;
+
+    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
+        let sc_count = Self::count(proto)? as usize;
+        let cmd = &VKMiscCommandId::SnapClickGet;
+
+        let mut ret = Self { start: 0, config: Vec::with_capacity(sc_count) };
+
+        let mut start = 0;
+        while start < sc_count {
+            let count = (sc_count - start).min(Self::MAX_REQ_ITEMS);
+            let resp = proto.device.raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            let value = cmd.check_reply(&resp)?;
+            for i in 0..count {
+                ret.config.push(VKSnapClick::try_from(&value[i * VKSnapClick::BYTE_SIZE..])?)
+            }
+            start += count;
+        }
+        Ok(ret)
+    }
+
+    pub fn load_part(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
+        let cmd = &VKMiscCommandId::SnapClickGet;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
+        let mut ret = VKSnapClickConfig::try_from(resp)?;
+        ret.start = start;
+        Ok(ret)
     }
 
     pub fn count(proto: &ViaKeychronProtocol) -> ViaResult<u8> {
-        proto.get_snap_click_info()
+        let cmd = &VKMiscCommandId::SnapClickGetInfo;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        Ok(cmd.check_reply(&resp)?[0])
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_snap_click(self)
+        let cmd = &VKMiscCommandId::SnapClickSet;
+        if self.config.len() > 9 {
+            return Err(ViaError::Protocol(format!(
+                "too many VKSnapClickConfig, (max=9): {}",
+                self.config.len()
+            )));
+        }
+        let mut data = Vec::with_capacity(2 + 3 * self.config.len());
+        data.push(self.start);
+        data.push(self.config.len() as u8);
+        for cfg in self.config.iter() {
+            data.push(cfg.snap_type as u8);
+            data.push(cfg.keycode[0]);
+            data.push(cfg.keycode[1]);
+        }
+        let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     pub fn save(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.save_snap_click()
+        let cmd = &VKMiscCommandId::SnapClickSave;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 
@@ -120,69 +171,5 @@ impl std::fmt::Display for VKSnapClickConfig {
             .field("start", &self.start)
             .field("config", &self.config)
             .finish()
-    }
-}
-
-pub trait VKSnapClickTrait {
-    /// @returns Supported snap_click count
-    fn get_snap_click_info(&self) -> ViaResult<u8>;
-
-    /// get snap_click info
-    ///
-    /// @params [count] must be <= 9
-    /// start + count must be < `SNAP_CLICK_COUNT` as returned by [get_snap_click_info]
-    fn get_snap_click(&self, start: u8, count: u8) -> ViaResult<VKSnapClickConfig>;
-
-    fn set_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()>;
-
-    fn save_snap_click(&self) -> ViaResult<()>;
-}
-
-impl VKSnapClickTrait for ViaKeychronProtocol<'_> {
-    /// @returns Supported snap_click count
-    fn get_snap_click_info(&self) -> ViaResult<u8> {
-        let cmd = &VKMiscCommandId::SnapClickGetInfo;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        Ok(cmd.check_reply(&resp)?[0])
-    }
-
-    /// get snap_click info
-    ///
-    /// @params [count] must be <= 9
-    /// start + count must be < `SNAP_CLICK_COUNT` as returned by [get_snap_click_info]
-    fn get_snap_click(&self, start: u8, count: u8) -> ViaResult<VKSnapClickConfig> {
-        let cmd = &VKMiscCommandId::SnapClickGet;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
-        let mut ret = VKSnapClickConfig::try_from(resp)?;
-        ret.start = start;
-        Ok(ret)
-    }
-
-    fn set_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::SnapClickSet;
-        if config.config.len() > 9 {
-            return Err(ViaError::Protocol(format!(
-                "too many VKSnapClickConfig, (max=9): {}",
-                config.config.len()
-            )));
-        }
-        let mut data = Vec::with_capacity(2 + 3 * config.config.len());
-        data.push(config.start);
-        data.push(config.config.len() as u8);
-        for cfg in config.config.iter() {
-            data.push(cfg.snap_type as u8);
-            data.push(cfg.keycode[0]);
-            data.push(cfg.keycode[1]);
-        }
-        let resp = self.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
-        cmd.check_reply(&resp)?;
-        Ok(())
-    }
-
-    fn save_snap_click(&self) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::SnapClickSave;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        cmd.check_reply(&resp)?;
-        Ok(())
     }
 }

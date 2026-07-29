@@ -57,11 +57,19 @@ impl VKLanguageLayout {
     pub const IT_CH: Self = Self::DE_CH;
 
     pub fn load(proto: &ViaKeychronProtocol<'_>) -> ViaResult<Self> {
-        proto.get_language()
+        let cmd = &VKMiscCommandId::LanguageGet;
+        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        tracing::trace!(?resp, "packet:");
+        let payload = cmd.check_reply(&resp)?;
+        Self::try_from(payload[0])
     }
 
     pub fn save(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
-        proto.set_language(self)
+        let cmd = &VKMiscCommandId::LanguageSet;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[*self as u8]))?;
+
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 
@@ -77,27 +85,5 @@ impl TryFrom<u8> for VKLanguageLayout {
         } else {
             Ok(unsafe { std::mem::transmute::<u8, VKLanguageLayout>(value) })
         }
-    }
-}
-
-pub trait VKLanguageLayoutTrait {
-    fn get_language(&self) -> ViaResult<VKLanguageLayout>;
-    fn set_language(&self, layout: &VKLanguageLayout) -> ViaResult<()>;
-}
-
-impl VKLanguageLayoutTrait for ViaKeychronProtocol<'_> {
-    fn get_language(&self) -> ViaResult<VKLanguageLayout> {
-        let cmd = &VKMiscCommandId::LanguageGet;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
-        let payload = cmd.check_reply(&resp)?;
-        VKLanguageLayout::try_from(payload[0])
-    }
-
-    fn set_language(&self, layout: &VKLanguageLayout) -> ViaResult<()> {
-        let cmd = &VKMiscCommandId::LanguageSet;
-        let resp = self.device.raw_hid_send(&cmd.to_req(&[*layout as u8]))?;
-
-        cmd.check_reply(&resp)?;
-        Ok(())
     }
 }

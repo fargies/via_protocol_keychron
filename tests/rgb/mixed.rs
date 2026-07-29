@@ -21,7 +21,9 @@
 */
 
 use serial_test::serial;
-use via_protocol_keychron::{VKFeatures, VKFeaturesTrait, VKRgbMixedEffectList, VKRgbMixedInfo, VKRgbMixedRegions, VKRgbTrait, ViaKeychronProtocol, ViaResult};
+use via_protocol_keychron::{
+    VKFeatures, VKRgbMixedEffectList, VKRgbMixedRegions, VKRgbTrait, ViaKeychronProtocol, ViaResult,
+};
 
 use crate::common::*;
 
@@ -39,14 +41,14 @@ fn regions() -> ViaResult<()> {
         return Ok(());
     }
 
-    let mixed_info = VKRgbMixedInfo::load(&proto)?;
+    let mixed_info = proto.get_rgb_info()?.mixed.clone();
     tracing::info!(%mixed_info);
 
     let led_count = proto.get_led_count()?;
     tracing::info!(led_count);
 
     // backup all regions
-    let regions = VKRgbMixedRegions::load(&proto)?;
+    let regions = proto.get_mixed_regions()?;
     assert_eq!(0, regions.start);
     assert_eq!(led_count, regions.regions.len());
     tracing::info!(?regions);
@@ -56,19 +58,19 @@ fn regions() -> ViaResult<()> {
         start: 0,
         regions: vec![1; led_count / 2],
     };
-    req.send(&proto)?;
+    proto.set_mixed_regions(&req)?;
 
     // load new regions map
-    let new_regions = VKRgbMixedRegions::load(&proto)?;
+    let new_regions = proto.get_mixed_regions()?;
     tracing::info!(?new_regions);
 
     // restore changes
     req.regions
         .copy_from_slice(&regions.regions[0..led_count / 2]);
-    req.send(&proto)?;
+    proto.set_mixed_regions(&req)?;
 
     // compare new config with backup for equality
-    let new_regions = VKRgbMixedRegions::load(&proto)?;
+    let new_regions = proto.get_mixed_regions()?;
     assert_eq!(new_regions, regions);
 
     Ok(())
@@ -88,14 +90,17 @@ fn effects() -> ViaResult<()> {
         return Ok(());
     }
 
-    let info = VKRgbMixedInfo::load(&proto)?;
+    let info = proto.get_mixed_info()?;
 
     for region in 0..info.get_region_count() {
-        let effects = VKRgbMixedEffectList::load(&proto, region)?;
+        let effects = proto.get_mixed_effects(region)?;
         tracing::info!(?effects);
         assert_eq!(effects.region, region);
         assert_eq!(effects.start, 0);
-        assert_eq!(effects.effects.len(), info.get_effects_per_region() as usize);
+        assert_eq!(
+            effects.effects.len(),
+            info.get_effects_per_region() as usize
+        );
 
         let single = VKRgbMixedEffectList::load_part(&proto, region, 1, 1)?;
         assert_eq!(single.region, region);
@@ -103,7 +108,6 @@ fn effects() -> ViaResult<()> {
         assert_eq!(1, single.effects.len());
         assert_eq!(effects.effects[1], single.effects[0]);
     }
-
 
     let effects = VKRgbMixedEffectList::load(&proto, 0)?;
     let mut new_effects = effects.clone();
