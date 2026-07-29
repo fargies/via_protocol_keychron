@@ -102,6 +102,7 @@ impl VKMiscCommandId {
 }
 
 impl VKCommandMaker for VKMiscCommandId {
+    /// @brief generate [VKCommand] from a [VKMiscCommandId]
     fn to_cmd(self) -> VKCommand {
         let mut report = [0u8; via_protocol::VIA_REPORT_SIZE + 1];
         report[0] = 0x00;
@@ -110,6 +111,7 @@ impl VKCommandMaker for VKMiscCommandId {
         VKCommand { report }
     }
 
+    /// @brief generate [VKCommand] from a [VKMiscCommandId] and data
     fn to_req(self, data: &[u8]) -> VKCommand {
         let mut ret = Self::to_cmd(self);
         let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
@@ -119,36 +121,52 @@ impl VKCommandMaker for VKMiscCommandId {
 }
 
 pub trait VKMiscTrait {
+    /// @brief get the misc info
     fn get_misc_info(&self) -> ViaResult<Arc<VKMiscInfo>>;
 
+    /// @brief get the debounce config
     fn get_debounce(&self) -> ViaResult<VKDebounceConfig>;
 
+    /// @brief set the debounce config
     fn set_debounce(&self, debounce: &VKDebounceConfig) -> ViaResult<()>;
 
+    /// @brief get the dfu info
     fn get_dfu_info(&self) -> ViaResult<VKDfuInfo>;
 
+    /// @brief get the language layout
     fn get_language(&self) -> ViaResult<VKLanguageLayout>;
 
+    /// @brief set the language layout
     fn set_language(&self, layout: &VKLanguageLayout) -> ViaResult<()>;
 
+    /// @brief get the nkro config
     fn get_nkro(&self) -> ViaResult<VKNkroConfig>;
 
+    /// @brief set the nkro config
     fn set_nkro(&self, value: &VKNkroConfig) -> ViaResult<()>;
 
+    /// @brief get the report rate config
     fn get_report_rate(&self) -> ViaResult<VKReportRateConfig>;
 
+    /// @brief set the report rate config
     fn set_report_rate(&self, config: &VKReportRateConfig) -> ViaResult<()>;
 
+    /// @brief get the snap click count
     fn get_snap_click_count(&self) -> ViaResult<u8>;
 
+    /// @brief get the snap click config
     fn get_snap_click(&self) -> ViaResult<VKSnapClickConfig>;
 
+    /// @brief set the snap click config
     fn set_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()>;
 
+    /// @brief save the snap click config
     fn save_snap_click(&self, config: &VKSnapClickConfig) -> ViaResult<()>;
 
+    /// @brief get the wireless lpm config
     fn get_wireless_lpm(&self) -> ViaResult<VKWirelessLpmConfig>;
 
+    /// @brief set the wireless lpm config
     fn set_wireless_lpm(&self, config: &VKWirelessLpmConfig) -> ViaResult<()>;
 }
 

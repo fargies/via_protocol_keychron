@@ -44,6 +44,7 @@ pub use per_key::*;
 mod mixed;
 pub use mixed::*;
 
+/// RGB command IDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum VKRgbCommandId {
@@ -92,6 +93,7 @@ impl VKRgbCommandId {
 }
 
 impl VKCommandMaker for VKRgbCommandId {
+    /// @brief generate [VKCommand] from a [VKRgbCommandId]
     fn to_cmd(self) -> VKCommand {
         let mut report = [0u8; via_protocol::VIA_REPORT_SIZE + 1];
         report[0] = 0x00;
@@ -100,6 +102,7 @@ impl VKCommandMaker for VKRgbCommandId {
         VKCommand { report }
     }
 
+    /// @brief generate [VKCommand] from a [VKRgbCommandId] and data
     fn to_req(self, data: &[u8]) -> VKCommand {
         let mut ret = Self::to_cmd(self);
         let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
@@ -126,28 +129,43 @@ impl VKRgb {
 }
 
 pub trait VKRgbTrait {
+    /// @brief get RGB info
     fn get_rgb_info(&self) -> ViaResult<Arc<VKRgbInfo>>;
 
+    /// @brief save RGB config to EEPROM
     fn save_rgb(&self) -> ViaResult<()>;
 
+    /// @brief get LED count
     fn get_led_count(&self) -> ViaResult<usize>;
 
+    /// @brief get RGB indicators
     fn get_indicators(&self) -> ViaResult<VKRgbIndicatorsConfig>;
 
+    /// @brief set RGB indicators
     fn set_indicators(&self, value: &VKRgbIndicatorsConfig) -> ViaResult<()>;
 
+    /// @brief get RGB mixed info
     fn get_mixed_info(&self) -> ViaResult<Arc<VKRgbMixedInfo>>;
 
+    /// @brief get RGB mixed regions
     fn get_mixed_regions(&self) -> ViaResult<VKRgbMixedRegions>;
 
+    /// @brief set RGB mixed regions
     fn set_mixed_regions(&self, regions: &VKRgbMixedRegions) -> ViaResult<()>;
 
+    /// @brief get RGB mixed effects
     fn get_mixed_effects(&self, region: u8) -> ViaResult<VKRgbMixedEffectList>;
 
+    /// @brief get RGB per key type
     fn get_pk_type(&self) -> ViaResult<VKRgbPerKeyType>;
+
+    /// @brief set RGB per key type
     fn set_pk_type(&self, value: &VKRgbPerKeyType) -> ViaResult<()>;
 
+    /// @brief get RGB per key color
     fn get_pk_led_color(&self) -> ViaResult<VKRgbPerKeyConfig>;
+
+    /// @brief set RGB per key color
     fn set_pk_led_color(&self, value: &VKRgbPerKeyConfig) -> ViaResult<()>;
 }
 
@@ -205,6 +223,7 @@ impl VKRgbTrait for ViaKeychronProtocol<'_> {
     }
 }
 
+/// @brief RGB HSV color as used by Keychron keyboards
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VKHsv {
     pub hue: u8,
@@ -213,8 +232,10 @@ pub struct VKHsv {
 }
 
 impl VKHsv {
+    /// @brief size of the HSV color in bytes
     pub const BYTE_SIZE: usize = 3;
 
+    /// @brief serialize the HSV color into a buffer
     pub fn serialize(&self, buffer: &mut [u8]) -> ViaResult<()> {
         if buffer.len() < 3 {
             Err(ViaError::Protocol(

@@ -24,17 +24,27 @@ use via_protocol::{ViaError, ViaResult};
 
 use crate::ViaReportData;
 
+/// @brief ViaKeychron command IDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum VKCommandId {
+    /// @brief Get protocol version
     GetProtocolVersion = 0xA0,
+    /// @brief Get firmware version
     GetFirmwareVersion = 0xA1,
+    /// @brief Get support feature
     GetSupportFeature = 0xA2,
+    /// @brief Get default layer
     GetDefaultLayer = 0xA3,
+    /// @brief Misc command group
     MiscCmdGroup = 0xA7,
+    /// @brief Keychron RGB
     KeychronRgb = 0xA8,
+    /// @brief Analog matrix
     AnalogMatrix = 0xA9,
+    /// @brief Wireless DFU
     WirelessDfu = 0xAA,
+    /// @brief Factory test
     FactoryTest = 0xAB,
 }
 

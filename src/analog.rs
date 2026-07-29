@@ -33,6 +33,7 @@ pub use profile::*;
 mod key_config;
 pub use key_config::*;
 
+/// @brief analog command IDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum VKAnalogCommandId {
@@ -57,8 +58,10 @@ pub enum VKAnalogCommandId {
 }
 
 impl VKAnalogCommandId {
+    /// @brief size of the analog command header in bytes
     pub const HEADER_BYTE_SIZE: usize = 2;
 
+    /// @brief checks the reply packet for the given analog command
     #[tracing::instrument(level = "ERROR", err)]
     pub fn check_reply<'a>(&self, value: &'a ViaReportData) -> ViaResult<&'a [u8]> {
         if value[0] != VKCommandId::AnalogMatrix as u8 {

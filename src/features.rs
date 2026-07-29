@@ -30,22 +30,34 @@ use crate::{
 };
 
 bitflags! {
+    /// @brief features supported by the Keychron keyboard
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct VKFeatures: u16 {
+        /// @brief default layer is supported
         const DEFAULT_LAYER    = 0b1;
+        /// @brief bluetooth is supported
         const BLUETOOTH        = 0b10;
+        /// @brief P24G is supported
         const P24G             = 0b100;
+        /// @brief analog matrix is supported
         const ANALOG_MATRIX    = 0b1000;
+        /// @brief state notify is supported
         const STATE_NOTIFY     = 0b1_0000;
+        /// @brief dynamic debounce is supported
         const DYNAMIC_DEBOUNCE = 0b10_0000;
+        /// @brief snap click is supported
         const SNAP_CLICK       = 0b100_0000;
+        /// @brief keychron RGB is supported
         const KEYCHRON_RGB     = 0b1000_0000;
+        /// @brief quick start is supported
         const QUICK_START      = 0b1_0000_0000;
+        /// @brief NKRO is supported
         const NKRO             = 0b10_0000_0000;
     }
 }
 
 impl VKFeatures {
+    /// @brief loads the features from the device
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
         if let Some(value) = proto.get_info().features.as_ref() {
             Ok(value.clone())

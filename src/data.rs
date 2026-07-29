@@ -23,18 +23,28 @@
 use bitflags::bitflags;
 use via_protocol::VIA_REPORT_SIZE;
 
+/// @brief Represents the data of a VIA report
 pub type ViaReportData = [u8; VIA_REPORT_SIZE];
 
 bitflags! {
+    /// @brief Represents the miscellaneous features of the device
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct VKMiscFeatures: u8 {
+        /// @brief DFU info is available
         const DFU_INFO            = 0b1;
+        /// @brief Language is available
         const LANGUAGE            = 0b10;
+        /// @brief Debounce is available
         const DEBOUNCE            = 0b100;
+        /// @brief Snap click is available
         const SNAP_CLICK          = 0b1000;
+        /// @brief Wireless LPM is available
         const WIRELESS_LPM        = 0b1_0000;
+        /// @brief Report rate is available
         const REPORT_RATE         = 0b10_0000;
+        /// @brief Quick start is available
         const QUICK_START         = 0b100_0000;
+        /// @brief NKRO is available
         const NKRO                = 0b1000_0000;
     }
 }

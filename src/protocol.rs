@@ -45,8 +45,12 @@ pub struct VKDeviceInfo {
     /// @details fetched using [VKProtocolVersion::load]
     pub protocol: Option<Arc<VKProtocolVersion>>,
 
+    /// @brief firmware version
+    /// @details fetched using [VKDeviceInfo::get_firmware_version]
     pub firmware_version: Option<Arc<String>>,
 
+    /// @brief device features
+    /// @details fetched using [VKDeviceInfo::get_support_features]
     pub features: Option<Arc<VKFeatures>>,
 
     /// @brief Misc protocol information
