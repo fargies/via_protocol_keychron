@@ -63,7 +63,7 @@ pub struct VKDeviceInfo {
 
     /// @brief analog keyboards info
     /// @details fetched using [VKAnalogProfileInfo::load]
-    pub analog: Option<Arc<VKAnalogProfileInfo<'static>>>,
+    pub analog: Option<Arc<VKAnalogProfileInfo>>,
 }
 
 impl<'a> ViaKeychronProtocol<'a> {

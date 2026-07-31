@@ -54,7 +54,7 @@ pub enum VKAnalogCommandId {
     GetRealtimeTraval = 0x30,
     Calibrate = 0x40,
     GetCalibrateState = 0x41,
-    SetCalibrateState = 0x42,
+    GetCalibratedValue = 0x42,
 }
 
 impl VKAnalogCommandId {

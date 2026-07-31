@@ -28,27 +28,44 @@ use super::VKAnalogKeyConfig;
 use crate::{VKAnalogCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct VKAnalogProfileInfo<'a> {
-    pub data: Cow<'a, [u8]>,
+pub struct VKAnalogProfileInfo {
+    pub data: Vec<u8>,
 }
 
-impl VKAnalogProfileInfo<'static> {
+impl VKAnalogProfileInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
         if let Some(value) = proto.get_info().analog.as_ref() {
             Ok(value.clone())
         } else {
-            let cmd = &VKAnalogCommandId::GetProfilesInfo;
-            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-            Self::try_from(resp).map(Arc::new).inspect(|info| {
-                Arc::make_mut(&mut proto.get_info_mut())
-                    .analog
-                    .replace(Arc::clone(info));
-            })
+            let resp = proto
+                .device
+                .raw_hid_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
+            let mut profile = Self::try_from(resp)?;
+
+            profile.load_key_count(proto)?;
+            let profile = Arc::new(profile);
+            Arc::make_mut(&mut proto.get_info_mut())
+                .analog
+                .replace(profile.clone());
+            Ok(profile)
         }
     }
-}
 
-impl VKAnalogProfileInfo<'_> {
+    fn load_key_count(&mut self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::GetCalibratedValue;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[0xFF, 0xFF]))?;
+        let payload = cmd.check_reply(&resp)?;
+        if payload[2] != 0 {
+            return Err(ViaError::Protocol(format!(
+                "invalid {cmd:?} packet, ret = {}",
+            payload[2]
+            )))
+        }
+        self.data[6] = payload[3]; /* rows */
+        self.data[7] = payload[5]; /* cols */
+        Ok(())
+    }
+
     /// @brief get current profile index
     pub fn get_current_profile(&self) -> u8 {
         self.data[0]
@@ -73,9 +90,27 @@ impl VKAnalogProfileInfo<'_> {
     pub fn get_socd_count(&self) -> u8 {
         self.data[5]
     }
+
+    /// @brief Get profile row count
+    pub fn get_row_count(&self) -> u8 {
+        self.data[6]
+    }
+
+    /// @brief Get profile columns count
+    pub fn get_col_count(&self) -> u8 {
+        self.data[7]
+    }
+
+    /// @brief get the profile key count
+    pub fn get_key_count(&self) -> usize {
+        (self.get_row_count() * self.get_col_count()) as usize
+    }
+
+    /// @brief get the name size in bytes (encoded in UTF-16)
+    pub fn get_name_size(&self) -> usize {}
 }
 
-impl std::fmt::Display for VKAnalogProfileInfo<'_> {
+impl std::fmt::Display for VKAnalogProfileInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VKAnalogProfileInfo")
             .field("current", &self.get_current_profile())
@@ -83,17 +118,19 @@ impl std::fmt::Display for VKAnalogProfileInfo<'_> {
             .field("byte_size", &self.get_raw_profile_byte_size())
             .field("okmc_count", &self.get_okmc_count())
             .field("socd_count", &self.get_socd_count())
+            .field("row_count", &self.get_row_count())
+            .field("col_count", &self.get_col_count())
             .finish()
     }
 }
 
-impl TryFrom<ViaReportData> for VKAnalogProfileInfo<'static> {
+impl TryFrom<ViaReportData> for VKAnalogProfileInfo {
     type Error = ViaError;
 
     fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
         let payload = VKAnalogCommandId::GetProfilesInfo.check_reply(&value)?;
         Ok(VKAnalogProfileInfo {
-            data: Cow::Owned(payload.into()),
+            data: payload.into(),
         })
     }
 }
@@ -137,7 +174,7 @@ impl VKAnalogProfile {
         let resp = proto.device.raw_hid_send(&cmd.to_req(&[index]))?;
         cmd.check_reply(&resp)?;
         if let Some(info) = Arc::make_mut(&mut proto.get_info_mut()).analog.as_mut() {
-            Arc::make_mut(info).data.to_mut()[0] = index;
+            Arc::make_mut(info).data[0] = index;
         }
         Ok(())
     }
