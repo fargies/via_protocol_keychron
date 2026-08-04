@@ -20,30 +20,49 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::sync::Arc;
+use std::fmt::{Debug, Formatter, Result};
 
-use via_protocol::{ViaError, ViaResult};
+/// Print an iterable item
+///
+/// This will consume the iterator, and allows to display containers in a fancy
+/// way, eventually using `map`
+///
+/// - [IntoIterator::Item] must implement [Debug]
+pub struct DebugIter<T>(std::cell::Cell<Option<T>>);
 
-use crate::{VKAnalogCommandId, VKAnalogInfo, ViaKeychronProtocol, ViaReportData};
+impl<T> Debug for DebugIter<T>
+where
+    T: IntoIterator,
+    T::Item: Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let mut list = f.debug_list();
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct VKAnalogProtocolVersion {
-    pub version: u8,
-}
-
-impl VKAnalogProtocolVersion {
-    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        VKAnalogInfo::load(proto).map(|info| info.protocol_version.clone())
+        if let Some(iterable) = self.0.replace(None) {
+            for i in iterable.into_iter() {
+                list.entry(&i);
+            }
+        }
+        list.finish()
     }
 }
 
-impl TryFrom<ViaReportData> for VKAnalogProtocolVersion {
-    type Error = ViaError;
+impl<T> DebugIter<T> {
+    pub fn new(value: T) -> Self {
+        Self(std::cell::Cell::new(Some(value)))
+    }
+}
 
-    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
-        let payload = VKAnalogCommandId::GetProtocolVersion.check_reply(&value)?;
-        Ok(Self {
-            version: payload[0],
-        })
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_iter() {
+        let value = [1, 2, 3];
+        assert_eq!(
+            "[1, 2, 3]",
+            format!("{:?}", DebugIter::new(value.iter())).as_str()
+        );
     }
 }

@@ -20,30 +20,36 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::sync::Arc;
+mod debug;
 
-use via_protocol::{ViaError, ViaResult};
+pub use debug::DebugIter;
 
-use crate::{VKAnalogCommandId, VKAnalogInfo, ViaKeychronProtocol, ViaReportData};
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct VKAnalogProtocolVersion {
-    pub version: u8,
+pub(crate) enum DebugAsDisplay<'a, T> {
+    Borrowed(&'a T),
+    Owned(T)
 }
 
-impl VKAnalogProtocolVersion {
-    pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        VKAnalogInfo::load(proto).map(|info| info.protocol_version.clone())
+impl<'a, T> From<T> for DebugAsDisplay<'a, T> {
+    fn from(value: T) -> Self {
+        DebugAsDisplay::Owned(value)
     }
 }
 
-impl TryFrom<ViaReportData> for VKAnalogProtocolVersion {
-    type Error = ViaError;
+impl<'a, T> From<&'a T> for DebugAsDisplay<'a, T> {
+    fn from(value: &'a T) -> Self {
+        DebugAsDisplay::Borrowed(value)
+    }
+}
 
-    fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
-        let payload = VKAnalogCommandId::GetProtocolVersion.check_reply(&value)?;
-        Ok(Self {
-            version: payload[0],
-        })
+impl<'a, T> std::fmt::Debug for DebugAsDisplay<'a, T>
+where
+    T: std::fmt::Display,
+{
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DebugAsDisplay::Borrowed(value) => value.fmt(f),
+            DebugAsDisplay::Owned(value) => value.fmt(f),
+        }
     }
 }

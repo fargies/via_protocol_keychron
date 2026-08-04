@@ -24,46 +24,41 @@ use std::sync::Arc;
 
 use via_protocol::ViaResult;
 
-use crate::{VKCommandMaker, ViaKeychronProtocol};
-
-use super::{VKRgbCommandId, VKRgbMixedInfo, VKRgbProtocolVersion};
+use crate::{VKAnalogCommandId, VKAnalogProfileInfo, VKAnalogProtocolVersion, VKCommandMaker, ViaKeychronProtocol};
 
 #[derive(Debug, Clone)]
-pub struct VKRgbInfo {
-    pub protocol_version: Arc<VKRgbProtocolVersion>,
-    pub mixed: Arc<VKRgbMixedInfo>,
-    pub led_count: usize,
+pub struct VKAnalogInfo {
+    pub protocol_version: Arc<VKAnalogProtocolVersion>,
+    pub profile_info: Arc<VKAnalogProfileInfo>,
 }
 
-impl VKRgbInfo {
+impl VKAnalogInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        if let Some(value) = proto.get_info().rgb.as_ref() {
+        if let Some(value) = proto.get_info().analog.as_ref() {
             Ok(value.clone())
         } else {
             let protocol_version = Arc::new({
-                let cmd = &VKRgbCommandId::RgbGetProtocolVer;
+                let cmd = &VKAnalogCommandId::GetProtocolVersion;
                 let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-                VKRgbProtocolVersion::try_from(resp)?
+                VKAnalogProtocolVersion::try_from(resp)?
             });
-            let mixed = Arc::new({
-                let cmd = &VKRgbCommandId::MixedEffectRgbGetInfo;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-                VKRgbMixedInfo::try_from(resp)?
+            let profile_info = Arc::new({
+                let resp = proto
+                    .device
+                    .raw_hid_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
+                let mut profile_info = VKAnalogProfileInfo::try_from(resp)?;
+
+                profile_info.load_key_count(proto)?;
+                profile_info
             });
-            let led_count = {
-                let cmd = &VKRgbCommandId::RgbGetLedCount;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-                cmd.check_reply(&resp)?[0] as usize
-            };
-            let ret = Arc::new(Self {
+            let info = Arc::new(Self {
                 protocol_version,
-                mixed,
-                led_count,
+                profile_info,
             });
             Arc::make_mut(&mut proto.get_info_mut())
-                .rgb
-                .replace(Arc::clone(&ret));
-            Ok(ret)
+                .analog
+                .replace(info.clone());
+            Ok(info)
         }
     }
 }

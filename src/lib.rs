@@ -46,6 +46,8 @@ pub use data::{VKMiscFeatures, ViaReportData};
 
 pub use via_protocol::{KeyboardDevice, ViaError, ViaResult};
 
+pub(crate) mod utils;
+
 #[cfg(test)]
 mod tests {
     #[ctor::ctor(unsafe)]

@@ -20,9 +20,14 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
+use std::sync::Arc;
+
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommand, VKCommandId, VKCommandMaker, ViaReportData};
+use crate::{VKCommand, VKCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
+
+mod info;
+pub use info::*;
 
 mod version;
 pub use version::*;
@@ -32,6 +37,12 @@ pub use profile::*;
 
 mod key_config;
 pub use key_config::*;
+
+mod okmc;
+pub use okmc::*;
+
+mod socd;
+pub use socd::*;
 
 /// @brief analog command IDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,7 +86,43 @@ impl VKAnalogCommandId {
                 value[1]
             )))
         } else {
-            Ok(&value[2..])
+            match self {
+                VKAnalogCommandId::SelectProfile |
+                VKAnalogCommandId::SetProfileName |
+                VKAnalogCommandId::SetTraval |
+                VKAnalogCommandId::SetAdvancedMode |
+                VKAnalogCommandId::SetSOCD |
+                VKAnalogCommandId::ResetProfile |
+                VKAnalogCommandId::SaveProfile |
+
+                VKAnalogCommandId::SetCurve |
+                VKAnalogCommandId::GetGameControllerMode |
+                /* FIXME: QMK bug VKAnalogCommandId::SetGameControllerMode */
+                VKAnalogCommandId::GetRealtimeTraval |
+                VKAnalogCommandId::Calibrate
+                 => {
+                    if value[2] != 0 {
+                        Err(ViaError::Protocol(format!(
+                            "invalid {self:?} packet, ret = {}",
+                            value[2]
+                        )))
+                    } else {
+                        Ok(&value[3..])
+                    }
+                },
+                VKAnalogCommandId::GetCalibratedValue => {
+                    if value[4] != 0 {
+                        Err(ViaError::Protocol(format!(
+                            "invalid {self:?} packet, ret = {}",
+                            value[4]
+                        )))
+                    } else {
+                        Ok(&value[5..])
+                    }
+                },
+
+                _ => Ok(&value[2..])
+            }
         }
     }
 }
@@ -94,5 +141,30 @@ impl VKCommandMaker for VKAnalogCommandId {
         let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
         ret.report[3..3 + copy_len].copy_from_slice(&data[..copy_len]);
         ret
+    }
+}
+
+pub trait VKAnalogTrait {
+    /// @brief gets the analog profile info for this device
+    fn get_analog_info(&self) -> ViaResult<Arc<VKAnalogInfo>>;
+
+    /// @brief gets the analog profile for the given index
+    fn get_analog_profile(&self, index: u8) -> ViaResult<VKAnalogProfile>;
+
+    /// @brief selects the analog profile
+    fn select_analog_profile(&self, index: u8) -> ViaResult<()>;
+}
+
+impl VKAnalogTrait for ViaKeychronProtocol<'_> {
+    fn get_analog_info(&self) -> ViaResult<Arc<VKAnalogInfo>> {
+        VKAnalogInfo::load(self)
+    }
+
+    fn get_analog_profile(&self, index: u8) -> ViaResult<VKAnalogProfile> {
+        VKAnalogProfile::load(self, index)
+    }
+
+    fn select_analog_profile(&self, index: u8) -> ViaResult<()> {
+        VKAnalogProfileInfo::select_profile(self, index)
     }
 }

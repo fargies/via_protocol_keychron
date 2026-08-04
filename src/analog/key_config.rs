@@ -20,7 +20,7 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, fmt::Debug};
 
 use via_protocol::{ViaError, ViaResult};
 
@@ -119,6 +119,10 @@ impl VKAnalogKeyConfig<'_> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        !self.get_mode().is_ok_and(|m| m != VKAnalogKeyConfigMode::Global)
+    }
+
     /// @brief Actuation point in 1/10 mm
     /// @details maximum value depends on keyboard, minimum value is generaly 0,2mm
     pub fn get_actuation_point(&self) -> u8 {
@@ -163,14 +167,14 @@ impl<'a> TryFrom<&'a [u8]> for VKAnalogKeyConfig<'a> {
             ));
         }
         let ret = VKAnalogKeyConfig {
-            data: Cow::Borrowed(value),
+            data: Cow::Borrowed(&value[0..Self::BYTE_SIZE]),
         };
         ret.get_mode()?;
         Ok(ret)
     }
 }
 
-impl Display for VKAnalogKeyConfig<'_> {
+impl std::fmt::Display for VKAnalogKeyConfig<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct("VKAnalogKeyConfig");
 
@@ -190,7 +194,7 @@ impl Display for VKAnalogKeyConfig<'_> {
             Ok(VKAnalogKeyConfigMode::DKS) | Ok(VKAnalogKeyConfigMode::Gamepad) => {
                 s.field("adv_mode_info", &self.get_adv_mode_info().unwrap());
             }
-            _ => ()
+            _ => (),
         };
         s.finish()
     }

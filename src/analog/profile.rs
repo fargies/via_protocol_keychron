@@ -20,12 +20,14 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use via_protocol::{VIA_REPORT_SIZE, ViaError, ViaResult};
 
-use super::VKAnalogKeyConfig;
-use crate::{VKAnalogCommandId, VKCommandMaker, ViaKeychronProtocol, ViaReportData};
+use crate::{
+    VKAnalogCommandId, VKAnalogInfo, VKAnalogKeyConfig, VKCommandMaker, VKOkmcConfig, VKSocdConfig,
+    ViaKeychronProtocol, ViaReportData,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VKAnalogProfileInfo {
@@ -34,41 +36,42 @@ pub struct VKAnalogProfileInfo {
 
 impl VKAnalogProfileInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Arc<Self>> {
-        if let Some(value) = proto.get_info().analog.as_ref() {
-            Ok(value.clone())
-        } else {
-            let resp = proto
-                .device
-                .raw_hid_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
-            let mut profile = Self::try_from(resp)?;
-
-            profile.load_key_count(proto)?;
-            let profile = Arc::new(profile);
-            Arc::make_mut(&mut proto.get_info_mut())
-                .analog
-                .replace(profile.clone());
-            Ok(profile)
-        }
+        VKAnalogInfo::load(proto).map(|info| info.profile_info.clone())
     }
 
-    fn load_key_count(&mut self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+    pub(crate) fn load_key_count(&mut self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::GetCalibratedValue;
         let resp = proto.device.raw_hid_send(&cmd.to_req(&[0xFF, 0xFF]))?;
         let payload = cmd.check_reply(&resp)?;
-        if payload[2] != 0 {
-            return Err(ViaError::Protocol(format!(
-                "invalid {cmd:?} packet, ret = {}",
-            payload[2]
-            )))
-        }
-        self.data[6] = payload[3]; /* rows */
-        self.data[7] = payload[5]; /* cols */
+        self.data[6] = payload[0]; /* rows */
+        self.data[7] = payload[2]; /* cols */
         Ok(())
     }
 
     /// @brief get current profile index
     pub fn get_current_profile(&self) -> u8 {
         self.data[0]
+    }
+
+    pub fn select_profile(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::SelectProfile;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index]))?;
+        cmd.check_reply(&resp)?;
+        if let Some(info) = Arc::make_mut(&mut proto.get_info_mut())
+            .analog
+            .as_mut()
+            .map(|info| &mut Arc::make_mut(info).profile_info)
+        {
+            Arc::make_mut(info).data[0] = index;
+        }
+        Ok(())
+    }
+
+    pub fn save_profile(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::SaveProfile;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index]))?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 
     /// @brief get number of profiles
@@ -105,9 +108,6 @@ impl VKAnalogProfileInfo {
     pub fn get_key_count(&self) -> usize {
         (self.get_row_count() * self.get_col_count()) as usize
     }
-
-    /// @brief get the name size in bytes (encoded in UTF-16)
-    pub fn get_name_size(&self) -> usize {}
 }
 
 impl std::fmt::Display for VKAnalogProfileInfo {
@@ -135,52 +135,145 @@ impl TryFrom<ViaReportData> for VKAnalogProfileInfo {
     }
 }
 
-pub struct VKAnalogOkmcConfig<'a> {
-    pub data: Cow<'a, [u8]>,
-}
-
-pub struct VKAnalogSocdConfig<'a> {
-    pub data: Cow<'a, [u8]>,
-}
-
+#[derive(Debug, Clone)]
 pub struct VKAnalogProfile {
     pub data: Vec<u8>,
+    pub index: u8,
+    pub key_count: usize,
+    pub okmc_count: u8,
+    pub socd_count: u8,
+    pub row_count: u8,
+    pub col_count: u8,
 }
 
 impl VKAnalogProfile {
     pub const MAX_REQ_RAW_BYTES: usize =
         VIA_REPORT_SIZE - (VKAnalogCommandId::HEADER_BYTE_SIZE + 4/* args size */);
 
+    /// maximum name length, not including terminating `\0`
+    pub const MAX_NAME_LEN: usize = VIA_REPORT_SIZE - (VKAnalogCommandId::HEADER_BYTE_SIZE + 2);
+
     pub fn get_global_key_config<'a>(&'a self) -> ViaResult<VKAnalogKeyConfig<'a>> {
         VKAnalogKeyConfig::try_from(&self.data[0..VKAnalogKeyConfig::BYTE_SIZE])
     }
+
     pub fn get_key_config<'a>(&'a self, index: usize) -> ViaResult<VKAnalogKeyConfig<'a>> {
+        if index >= self.key_count {
+            return Err(ViaError::Protocol(format!(
+                "no such key index: {index} (max:{})",
+                self.key_count - 1
+            )));
+        }
         let pos = (1 + index) * VKAnalogKeyConfig::BYTE_SIZE;
         VKAnalogKeyConfig::try_from(&self.data[pos..pos + VKAnalogKeyConfig::BYTE_SIZE])
     }
-    pub fn get_okmc_config<'a>(&'a self) -> ViaResult<VKAnalogOkmcConfig<'a>> {
-        todo!()
-    }
-    pub fn get_socd_config<'a>(&'a self) -> ViaResult<VKAnalogSocdConfig<'a>> {
-        todo!()
-    }
-    pub fn get_name(&self) -> ViaResult<String> {
-        todo!()
+
+    pub fn iter_key_config<'a>(&'a self) -> impl Iterator<Item = VKAnalogKeyConfig<'a>> {
+        (0..self.key_count).filter_map(|i| self.get_key_config(i).ok())
     }
 
-    /// @brief select the current profile
-    pub fn select(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<()> {
-        let cmd = &VKAnalogCommandId::SelectProfile;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index]))?;
-        cmd.check_reply(&resp)?;
-        if let Some(info) = Arc::make_mut(&mut proto.get_info_mut()).analog.as_mut() {
-            Arc::make_mut(info).data[0] = index;
+    pub fn get_okmc_config<'a>(&'a self, index: usize) -> ViaResult<VKOkmcConfig<'a>> {
+        if index >= self.okmc_count as usize {
+            return Err(ViaError::Protocol(format!(
+                "no such okmc index: {index} (max:{})",
+                self.okmc_count - 1
+            )));
+        }
+        let pos =
+            (1 + self.key_count) * VKAnalogKeyConfig::BYTE_SIZE + index * VKOkmcConfig::BYTE_SIZE;
+        VKOkmcConfig::try_from(&self.data[pos..pos + VKOkmcConfig::BYTE_SIZE])
+    }
+
+    pub fn iter_okmc_config<'a>(&'a self) -> impl Iterator<Item = VKOkmcConfig<'a>> {
+        (0..self.okmc_count as usize).filter_map(|index| self.get_okmc_config(index).ok())
+    }
+
+    pub fn get_socd_config<'a>(&'a self, index: usize) -> ViaResult<VKSocdConfig<'a>> {
+        if index >= self.socd_count as usize {
+            return Err(ViaError::Protocol(format!(
+                "no such socd index: {index} (max:{})",
+                self.socd_count - 1
+            )));
+        }
+        let pos = (1 + self.key_count) * VKAnalogKeyConfig::BYTE_SIZE
+            + self.okmc_count as usize * VKOkmcConfig::BYTE_SIZE
+            + index * VKSocdConfig::BYTE_SIZE;
+        VKSocdConfig::try_from((
+            &self.data[pos..pos + VKSocdConfig::BYTE_SIZE],
+            self.col_count,
+        ))
+    }
+
+    pub fn iter_socd_config<'a>(&'a self) -> impl Iterator<Item = VKSocdConfig<'a>> {
+        (0..self.socd_count as usize).filter_map(|index| self.get_socd_config(index).ok())
+    }
+
+    pub fn get_name(&self) -> ViaResult<String> {
+        let pos = (1 + self.key_count) * VKAnalogKeyConfig::BYTE_SIZE
+            + self.okmc_count as usize * VKOkmcConfig::BYTE_SIZE
+            + self.socd_count as usize * VKSocdConfig::BYTE_SIZE;
+        std::char::decode_utf16(
+            self.data[pos..self.data.len() - 2]
+                .chunks(2)
+                .map_while(|k| {
+                    k.as_array::<2>()
+                        .map(|k| u16::from_be_bytes(*k))
+                        .filter(|v| v != &0)
+                }),
+        )
+        .collect::<Result<String, _>>()
+        .map_err(|e| ViaError::Protocol(format!("failed to parse utf16: {e}")))
+    }
+
+    pub fn set_name<K>(&mut self, name: K) -> ViaResult<()>
+    where
+        K: AsRef<str>,
+    {
+        let pos = (1 + self.key_count) * VKAnalogKeyConfig::BYTE_SIZE
+            + self.okmc_count as usize * VKOkmcConfig::BYTE_SIZE
+            + self.socd_count as usize * VKSocdConfig::BYTE_SIZE;
+        let mut buffer = [0; 2];
+        let mut out = self.data[pos..pos + Self::MAX_NAME_LEN].iter_mut();
+        for char in name.as_ref().chars() {
+            let buffer = char.encode_utf16(&mut buffer);
+
+            for c in buffer {
+                for b in c.to_be_bytes() {
+                    *out.next().ok_or_else(|| {
+                        ViaError::Protocol("name too long for VKAnalogProfile".into())
+                    })? = b;
+                }
+            }
+        }
+        for c in out {
+            *c = 0;
         }
         Ok(())
     }
 
+    pub fn send_name(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::SetProfileName;
+        let pos = (1 + self.key_count) * VKAnalogKeyConfig::BYTE_SIZE
+            + self.okmc_count as usize * VKOkmcConfig::BYTE_SIZE
+            + self.socd_count as usize * VKSocdConfig::BYTE_SIZE;
+        let mut pkt = cmd.to_cmd();
+        pkt.report[3] = self.index;
+        pkt.report[4] = Self::MAX_NAME_LEN as u8;
+        pkt.report[5..].copy_from_slice(&self.data[pos..pos + Self::MAX_NAME_LEN]);
+        let resp = proto.device.raw_hid_send(&pkt)?;
+        cmd.check_reply(&resp)?;
+
+        Ok(())
+    }
+
+    /// @brief select the current profile
+    pub fn select(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        VKAnalogProfileInfo::select_profile(proto, self.index)
+    }
+
     pub fn load(proto: &ViaKeychronProtocol, index: u8) -> ViaResult<VKAnalogProfile> {
-        let total_size = VKAnalogProfileInfo::load(proto)?.get_raw_profile_byte_size() as usize;
+        let info = VKAnalogProfileInfo::load(proto)?;
+        let total_size = info.get_raw_profile_byte_size() as usize;
         let cmd = &VKAnalogCommandId::GetProfileRaw;
         let mut data = Vec::with_capacity(total_size);
 
@@ -197,6 +290,14 @@ impl VKAnalogProfile {
             data.extend_from_slice(&payload[4..4 + size]);
             offset += size;
         }
-        Ok(VKAnalogProfile { data })
+        Ok(VKAnalogProfile {
+            data,
+            index,
+            okmc_count: info.get_okmc_count(),
+            socd_count: info.get_socd_count(),
+            key_count: info.get_key_count(),
+            row_count: info.get_row_count(),
+            col_count: info.get_col_count(),
+        })
     }
 }
