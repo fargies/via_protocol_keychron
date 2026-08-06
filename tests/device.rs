@@ -32,5 +32,6 @@ mod rgb {
 mod analog {
     mod version;
     mod profile;
+    mod key_config;
 }
 mod common;

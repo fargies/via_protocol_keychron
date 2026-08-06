@@ -83,10 +83,15 @@ impl<'a> ViaKeychronProtocol<'a> {
     pub fn load_info(&self) -> ViaResult<Arc<VKDeviceInfo>> {
         VKProtocolVersion::load(self)?;
         self.get_firmware_version()?;
-        VKFeatures::load(self)?;
+        let features = VKFeatures::load(self)?;
         VKMiscInfo::load(self)?;
-        VKRgbInfo::load(self)?;
-        VKAnalogInfo::load(self)?;
+
+        if features.contains(VKFeatures::KEYCHRON_RGB) {
+            VKRgbInfo::load(self)?;
+        }
+        if features.contains(VKFeatures::ANALOG_MATRIX) {
+            VKAnalogInfo::load(self)?;
+        }
         Ok(self.get_info())
     }
 

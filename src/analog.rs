@@ -149,10 +149,10 @@ pub trait VKAnalogTrait {
     fn get_analog_info(&self) -> ViaResult<Arc<VKAnalogInfo>>;
 
     /// @brief gets the analog profile for the given index
-    fn get_analog_profile(&self, index: u8) -> ViaResult<VKAnalogProfile>;
+    fn get_analog_profile(&self, index: usize) -> ViaResult<VKAnalogProfile>;
 
     /// @brief selects the analog profile
-    fn select_analog_profile(&self, index: u8) -> ViaResult<()>;
+    fn select_analog_profile(&self, index: usize) -> ViaResult<()>;
 }
 
 impl VKAnalogTrait for ViaKeychronProtocol<'_> {
@@ -160,11 +160,11 @@ impl VKAnalogTrait for ViaKeychronProtocol<'_> {
         VKAnalogInfo::load(self)
     }
 
-    fn get_analog_profile(&self, index: u8) -> ViaResult<VKAnalogProfile> {
+    fn get_analog_profile(&self, index: usize) -> ViaResult<VKAnalogProfile> {
         VKAnalogProfile::load(self, index)
     }
 
-    fn select_analog_profile(&self, index: u8) -> ViaResult<()> {
+    fn select_analog_profile(&self, index: usize) -> ViaResult<()> {
         VKAnalogProfileInfo::select_profile(self, index)
     }
 }

@@ -63,7 +63,7 @@ pub enum VKSocdKey {
 #[derive(Debug, Clone)]
 pub struct VKSocdConfig<'a> {
     pub data: Cow<'a, [u8]>,
-    col_count: u8,
+    col_count: usize,
 }
 
 impl VKSocdConfig<'_> {
@@ -79,7 +79,7 @@ impl VKSocdConfig<'_> {
             VKSocdKey::Key1 => self.data[0],
             VKSocdKey::Key2 => self.data[1],
         };
-        ((data & 0x7) * self.col_count) | (data >> 3)
+        ((data & 0x7) * self.col_count as u8) | (data >> 3)
     }
 
     pub fn iter_key(&self) -> impl Iterator<Item = u8> {
@@ -108,10 +108,10 @@ impl Display for VKSocdConfig<'_> {
     }
 }
 
-impl<'a> TryFrom<(&'a [u8], u8)> for VKSocdConfig<'a> {
+impl<'a> TryFrom<(&'a [u8], usize)> for VKSocdConfig<'a> {
     type Error = ViaError;
 
-    fn try_from((value, col_count): (&'a [u8], u8)) -> Result<Self, Self::Error> {
+    fn try_from((value, col_count): (&'a [u8], usize)) -> Result<Self, Self::Error> {
         if value.len() < Self::BYTE_SIZE {
             Err(ViaError::Protocol(
                 "buffer too small for VKSocdConfig".into(),

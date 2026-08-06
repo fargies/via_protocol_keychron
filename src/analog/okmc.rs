@@ -32,6 +32,7 @@ pub type VKKeyCode = u16;
 #[derive(Debug, Clone)]
 pub struct VKOkmcConfig<'a> {
     pub data: Cow<'a, [u8]>,
+    pub index: usize
 }
 
 
@@ -89,6 +90,7 @@ impl VKOkmcConfig<'_> {
 impl Display for VKOkmcConfig<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct("VKAnalogOkmcConfig");
+        s.field("index", &self.index);
 
         let travel = self.get_travel_config();
         match travel {
@@ -109,10 +111,11 @@ impl Display for VKOkmcConfig<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for VKOkmcConfig<'a> {
+/// @brief build Okmc from raw data and index
+impl<'a> TryFrom<(&'a [u8], usize)> for VKOkmcConfig<'a> {
     type Error = ViaError;
 
-    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
+    fn try_from((value, index): (&'a [u8], usize)) -> Result<Self, Self::Error> {
         if value.len() < Self::BYTE_SIZE {
             Err(ViaError::Protocol(
                 "buffer too small for VKOkmcConfig".into(),
@@ -120,6 +123,7 @@ impl<'a> TryFrom<&'a [u8]> for VKOkmcConfig<'a> {
         } else {
             Ok(VKOkmcConfig {
                 data: Cow::Borrowed(&value[0..Self::BYTE_SIZE]),
+                index
             })
         }
     }

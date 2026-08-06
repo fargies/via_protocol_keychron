@@ -24,6 +24,7 @@ use serial_test::serial;
 use via_protocol::ViaResult;
 use via_protocol_keychron::{VKAnalogProtocolVersion, ViaKeychronProtocol};
 
+use super::profile::is_analog;
 use crate::common::*;
 
 #[test]
@@ -31,6 +32,9 @@ use crate::common::*;
 fn load() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
 
     let analog_version = VKAnalogProtocolVersion::load(&proto)?;
     tracing::info!(?analog_version);

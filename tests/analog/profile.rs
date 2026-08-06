@@ -23,16 +23,28 @@
 use serial_test::serial;
 use via_protocol::ViaResult;
 use via_protocol_keychron::{
-    VKAnalogKeyConfigMode, VKAnalogTrait, ViaKeychronProtocol,
+    VKAnalogKeyConfigMode, VKAnalogTrait, VKFeatures, ViaKeychronProtocol,
 };
 
 use crate::common::*;
+
+pub fn is_analog(proto: &ViaKeychronProtocol) -> ViaResult<bool> {
+    if !VKFeatures::load(proto)?.contains(VKFeatures::ANALOG_MATRIX) {
+        tracing::info!("not an analog device");
+        /* skip the test */
+        return Ok(false);
+    }
+    Ok(true)
+}
 
 #[test]
 #[serial(keyboard)]
 fn load_info() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
 
     let info = proto.get_analog_info()?;
     tracing::info!(profile_info = %info.profile_info, protocol_version = ?info.protocol_version);
@@ -44,6 +56,10 @@ fn load_info() -> ViaResult<()> {
 fn select() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
+
     let info = proto.get_analog_info()?.profile_info.clone();
     let current_profile = info.get_current_profile();
 
@@ -68,6 +84,10 @@ fn select() -> ViaResult<()> {
 fn load_profile() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
+
     let info = proto.get_analog_info()?.profile_info.clone();
 
     let profile = proto.get_analog_profile(0)?;
@@ -127,6 +147,10 @@ fn load_profile() -> ViaResult<()> {
 fn profile_name() -> ViaResult<()> {
     let kbd = get_keyboard(&HID)?;
     let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
+
     let info = proto.get_analog_info()?.profile_info.clone();
 
     let mut profile = proto.get_analog_profile(0)?;
