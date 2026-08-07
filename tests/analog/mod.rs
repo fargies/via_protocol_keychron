@@ -20,7 +20,7 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-mod rgb;
-mod analog;
-mod common;
+mod key_config;
+mod profile;
+mod socd;
+mod version;

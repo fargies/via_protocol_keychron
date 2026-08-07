@@ -108,15 +108,7 @@ impl VKCommandMaker for VKMiscCommandId {
         report[0] = 0x00;
         report[1] = VKCommandId::MiscCmdGroup as u8;
         report[2] = self as u8;
-        VKCommand { report }
-    }
-
-    /// @brief generate [VKCommand] from a [VKMiscCommandId] and data
-    fn to_req(self, data: &[u8]) -> VKCommand {
-        let mut ret = Self::to_cmd(self);
-        let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
-        ret.report[3..3 + copy_len].copy_from_slice(&data[..copy_len]);
-        ret
+        VKCommand { report, payload_offset: 3 }
     }
 }
 

@@ -32,6 +32,7 @@ use crate::{
 pub struct VKAnalogKeyConfig<'a> {
     pub data: Cow<'a, [u8]>,
     pub index: Option<usize>,
+    pub profile: Option<usize>,
 }
 
 impl VKAnalogKeyConfig<'_> {
@@ -114,23 +115,22 @@ impl VKAnalogKeyConfig<'_> {
     }
 
     /// set advanced mode data
-    ///
-    /// See:
-    /// - [crate::VKAnalogProfile::send_mode_okmc]
     pub fn set_adv_mode_info<K>(&mut self, value: K)
     where
-        K: Into<u8>,
+        K: Into<VKAnalogKeyConfigAdvData>,
     {
         let data = self.data.to_mut();
-        data[3] = value.into();
+        data[3] = value.into().into();
     }
 
-    pub fn send(
-        &self,
-        proto: &ViaKeychronProtocol,
-        profile: usize,
-        okmc: Option<&VKOkmcConfig>,
-    ) -> ViaResult<()> {
+    pub fn send(&self, proto: &ViaKeychronProtocol, okmc: Option<&VKOkmcConfig>) -> ViaResult<()> {
+        let profile = self.profile.ok_or_else(|| {
+            ViaError::Protocol(
+                "destination profile must be set to invoke VKAnalogKeyConfig::send".into(),
+            )
+        })?;
+
+        self.send_travel(proto, profile)?;
         match self.get_mode()? {
             VKAnalogKeyConfigMode::Global
             | VKAnalogKeyConfigMode::Regular
@@ -150,6 +150,31 @@ impl VKAnalogKeyConfig<'_> {
         Ok(())
     }
 
+    fn send_travel(&self, proto: &ViaKeychronProtocol, profile: usize) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::SetTravel;
+        let mut req = cmd.to_cmd();
+        let payload = req.payload_mut();
+        payload[0] = profile as u8;
+        payload[1] = self.data[0] & 0x03; /* only "main" part of mode */
+        payload[2] = self.get_actuation_point();
+        payload[3] = self.get_rapid_trig_sen();
+        payload[4] = self.get_rapid_trig_sen_deact();
+        if let Some(index) = self.index {
+            payload[5] = 0;
+            let col_count = VKAnalogProfileInfo::load(proto)?.get_col_count();
+            let row_offset = 6 + (index / col_count) * size_of::<u32>();
+            let col = index % col_count;
+            payload[row_offset..row_offset + size_of::<u32>()]
+                .copy_from_slice((1u32 << col).to_le_bytes().as_slice());
+        } else {
+            payload[5] = 1;
+        }
+
+        let resp = proto.device.raw_hid_send(&req)?;
+        cmd.check_reply(&resp)?;
+        Ok(())
+    }
+
     fn send_adv_mode(
         &self,
         proto: &ViaKeychronProtocol,
@@ -164,10 +189,11 @@ impl VKAnalogKeyConfig<'_> {
         let col_count = VKAnalogProfileInfo::load(proto)?.get_col_count() as u8;
         let cmd = &VKAnalogCommandId::SetAdvancedMode;
         let mut req = cmd.to_cmd();
-        req.report[3] = profile as u8;
-        req.report[4] = mode as u8;
-        req.report[5] = key_index / col_count;
-        req.report[6] = key_index % col_count;
+        let data = req.payload_mut();
+        data[0] = profile as u8;
+        data[1] = mode as u8;
+        data[2] = key_index / col_count;
+        data[3] = key_index % col_count;
 
         match mode {
             VKAnalogKeyConfigAdvMode::Okmc => {
@@ -186,11 +212,11 @@ impl VKAnalogKeyConfig<'_> {
                     }
                     _ => panic!("inconsistent adv_mode_inf for DKS mode"), /* should not happen */
                 };
-                req.report[7] = okmc.index as u8;
-                req.report[8..8 + VKOkmcConfig::BYTE_SIZE].copy_from_slice(okmc.data.as_ref());
+                data[4] = okmc.index as u8;
+                data[5..5 + VKOkmcConfig::BYTE_SIZE].copy_from_slice(okmc.data.as_ref());
             }
             VKAnalogKeyConfigAdvMode::Gamepad => {
-                req.report[7] = self.get_adv_mode_info()?.into();
+                data[4] = self.get_adv_mode_info()?.into();
             }
             _ => {}
         }
@@ -201,10 +227,10 @@ impl VKAnalogKeyConfig<'_> {
     }
 }
 
-impl<'a> TryFrom<(&'a [u8], usize)> for VKAnalogKeyConfig<'a> {
+impl<'a> TryFrom<&'a [u8]> for VKAnalogKeyConfig<'a> {
     type Error = ViaError;
 
-    fn try_from((value, index): (&'a [u8], usize)) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
         if value.len() < Self::BYTE_SIZE {
             return Err(ViaError::Protocol(
                 "buffer too small for VKAnalogKeyConfigMode".into(),
@@ -212,19 +238,10 @@ impl<'a> TryFrom<(&'a [u8], usize)> for VKAnalogKeyConfig<'a> {
         }
         let ret = VKAnalogKeyConfig {
             data: Cow::Borrowed(&value[0..Self::BYTE_SIZE]),
-            index: Some(index),
+            index: None,
+            profile: None,
         };
         ret.get_mode()?;
-        Ok(ret)
-    }
-}
-
-impl<'a> TryFrom<&'a [u8]> for VKAnalogKeyConfig<'a> {
-    type Error = ViaError;
-
-    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {
-        let mut ret = Self::try_from((value, 0))?;
-        ret.index = None;
         Ok(ret)
     }
 }
@@ -306,6 +323,12 @@ pub enum VKAnalogKeyConfigAdvData {
     Okmc { index: usize },
 }
 
+impl From<u8> for VKAnalogKeyConfigAdvData {
+    fn from(value: u8) -> Self {
+        VKAnalogKeyConfigAdvData::Unknown(value)
+    }
+}
+
 impl From<VKAnalogKeyConfigAdvData> for u8 {
     fn from(val: VKAnalogKeyConfigAdvData) -> Self {
         match val {
@@ -313,6 +336,12 @@ impl From<VKAnalogKeyConfigAdvData> for u8 {
             VKAnalogKeyConfigAdvData::Gamepad(value) => value as u8,
             VKAnalogKeyConfigAdvData::Okmc { index } => index as u8,
         }
+    }
+}
+
+impl From<VKAnalogGamepadData> for VKAnalogKeyConfigAdvData {
+    fn from(value: VKAnalogGamepadData) -> Self {
+        VKAnalogKeyConfigAdvData::Gamepad(value)
     }
 }
 

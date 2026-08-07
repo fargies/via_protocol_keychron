@@ -24,6 +24,8 @@ use std::{borrow::Cow, fmt::Display};
 
 use via_protocol::{ViaError, ViaResult};
 
+use crate::{VKAnalogCommandId, VKCommandMaker, ViaKeychronProtocol};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum VKSocdType {
@@ -60,9 +62,11 @@ pub enum VKSocdKey {
     Key2,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VKSocdConfig<'a> {
     pub data: Cow<'a, [u8]>,
+    pub index: Option<usize>,
+    pub profile: Option<usize>,
     col_count: usize,
 }
 
@@ -74,15 +78,24 @@ impl VKSocdConfig<'_> {
     }
 
     /// @brief retrieve the key index
-    pub fn get_key(&self, key: VKSocdKey) -> u8 {
+    pub fn get_key(&self, key: VKSocdKey) -> usize {
         let data = match key {
             VKSocdKey::Key1 => self.data[0],
             VKSocdKey::Key2 => self.data[1],
         };
-        ((data & 0x7) * self.col_count as u8) | (data >> 3)
+        (((data & 0x7) * self.col_count as u8) | (data >> 3)) as usize
     }
 
-    pub fn iter_key(&self) -> impl Iterator<Item = u8> {
+    pub fn set_key(&mut self, key: VKSocdKey, key_index: usize) {
+        let (col, row) = ((key_index % self.col_count) as u8, (key_index / self.col_count) as u8);
+        let data = self.data.to_mut();
+        match key {
+            VKSocdKey::Key1 => data[0] = row | (col << 3),
+            VKSocdKey::Key2 => data[1] = row | (col << 3),
+        }
+    }
+
+    pub fn iter_key(&self) -> impl Iterator<Item = usize> {
         [VKSocdKey::Key1, VKSocdKey::Key2]
             .into_iter()
             .map(|k| self.get_key(k))
@@ -91,6 +104,34 @@ impl VKSocdConfig<'_> {
     /// @brief get the VKSocdType
     pub fn get_type(&self) -> ViaResult<VKSocdType> {
         VKSocdType::try_from(self.data[2])
+    }
+
+    pub fn set_type(&mut self, key_type: VKSocdType) {
+        self.data.to_mut()[2] = key_type as u8;
+    }
+
+    pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::SetSOCD;
+        let mut req = cmd.to_cmd();
+        let payload = req.payload_mut();
+        payload[0] = self.profile.ok_or_else(|| {
+            ViaError::Protocol(
+                "destination profile must be set to invoke VKSocdConfig::send".into(),
+            )
+        })? as u8;
+        payload[1] = self.data[0] & 0x7;
+        payload[2] = self.data[0] >> 3;
+        payload[3] = self.data[1] & 0x7;
+        payload[4] = self.data[1] >> 3;
+        payload[5] = self.index.ok_or_else(|| {
+            ViaError::Protocol(
+                "Socd index must be set to invoke VKSocdConfig::send".into(),
+            )
+        })? as u8;
+        payload[6] = self.data[2];
+        let resp = proto.device.raw_hid_send(&req)?;
+        cmd.check_reply(&resp)?;
+        Ok(())
     }
 }
 
@@ -119,6 +160,8 @@ impl<'a> TryFrom<(&'a [u8], usize)> for VKSocdConfig<'a> {
         } else {
             let ret = VKSocdConfig {
                 data: Cow::Borrowed(&value[0..Self::BYTE_SIZE]),
+                index: None,
+                profile: None,
                 col_count,
             };
             ret.get_type()?; // sanity check

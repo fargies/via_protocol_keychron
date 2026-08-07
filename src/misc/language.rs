@@ -59,7 +59,6 @@ impl VKLanguageLayout {
     pub fn load(proto: &ViaKeychronProtocol<'_>) -> ViaResult<Self> {
         let cmd = &VKMiscCommandId::LanguageGet;
         let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
-        tracing::trace!(?resp, "packet:");
         let payload = cmd.check_reply(&resp)?;
         Self::try_from(payload[0])
     }

@@ -20,7 +20,6 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-mod rgb;
-mod analog;
-mod common;
+mod features;
+mod mixed;
+mod per_key;

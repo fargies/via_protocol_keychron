@@ -53,7 +53,7 @@ pub enum VKAnalogCommandId {
     SelectProfile = 0x11,
     GetProfileRaw = 0x12,
     SetProfileName = 0x13,
-    SetTraval = 0x14,
+    SetTravel = 0x14,
     SetAdvancedMode = 0x15,
     SetSOCD = 0x16,
     ResetProfile = 0x1E,
@@ -89,7 +89,7 @@ impl VKAnalogCommandId {
             match self {
                 VKAnalogCommandId::SelectProfile |
                 VKAnalogCommandId::SetProfileName |
-                VKAnalogCommandId::SetTraval |
+                VKAnalogCommandId::SetTravel |
                 VKAnalogCommandId::SetAdvancedMode |
                 VKAnalogCommandId::SetSOCD |
                 VKAnalogCommandId::ResetProfile |
@@ -133,14 +133,7 @@ impl VKCommandMaker for VKAnalogCommandId {
         report[0] = 0x00;
         report[1] = VKCommandId::AnalogMatrix as u8;
         report[2] = self as u8;
-        VKCommand { report }
-    }
-
-    fn to_req(self, data: &[u8]) -> VKCommand {
-        let mut ret = Self::to_cmd(self);
-        let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 2);
-        ret.report[3..3 + copy_len].copy_from_slice(&data[..copy_len]);
-        ret
+        VKCommand { report, payload_offset: 3 }
     }
 }
 

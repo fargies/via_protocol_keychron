@@ -99,7 +99,7 @@ impl VKCommandMaker for VKRgbCommandId {
         report[0] = 0x00;
         report[1] = VKCommandId::KeychronRgb as u8;
         report[2] = self as u8;
-        VKCommand { report }
+        VKCommand { report, payload_offset: 3 }
     }
 
     /// @brief generate [VKCommand] from a [VKRgbCommandId] and data

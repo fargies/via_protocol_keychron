@@ -62,9 +62,16 @@ impl VKCommandId {
     }
 }
 
-pub trait VKCommandMaker {
+pub trait VKCommandMaker: Sized {
     fn to_cmd(self) -> VKCommand;
-    fn to_req(self, data: &[u8]) -> VKCommand;
+
+    fn to_req(self, data: &[u8]) -> VKCommand {
+        let mut ret = Self::to_cmd(self);
+        let offset = ret.payload_offset;
+        let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - offset);
+        ret.report[offset..offset + copy_len].copy_from_slice(&data[..copy_len]);
+        ret
+    }
 }
 
 impl VKCommandMaker for VKCommandId {
@@ -72,19 +79,26 @@ impl VKCommandMaker for VKCommandId {
         let mut report = [0u8; via_protocol::VIA_REPORT_SIZE + 1];
         report[0] = 0x00;
         report[1] = self as u8;
-        VKCommand { report }
-    }
-
-    fn to_req(self, data: &[u8]) -> VKCommand {
-        let mut ret = Self::to_cmd(self);
-        let copy_len = data.len().min(via_protocol::VIA_REPORT_SIZE - 1);
-        ret.report[2..2 + copy_len].copy_from_slice(&data[..copy_len]);
-        ret
+        VKCommand {
+            report,
+            payload_offset: 2,
+        }
     }
 }
 
 pub struct VKCommand {
     pub report: [u8; via_protocol::VIA_REPORT_SIZE + 1],
+    pub payload_offset: usize,
+}
+
+impl VKCommand {
+    pub fn payload(&self) -> &[u8] {
+        &self.report[self.payload_offset..]
+    }
+
+    pub fn payload_mut(&mut self) -> &mut [u8] {
+        &mut self.report[self.payload_offset..]
+    }
 }
 
 impl std::ops::Deref for VKCommand {

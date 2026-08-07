@@ -170,7 +170,13 @@ impl VKAnalogProfile {
             )));
         }
         let pos = self.get_key_config_offset(index);
-        VKAnalogKeyConfig::try_from((&self.data[pos..pos + VKAnalogKeyConfig::BYTE_SIZE], index))
+        VKAnalogKeyConfig::try_from(&self.data[pos..pos + VKAnalogKeyConfig::BYTE_SIZE]).map(
+            |mut v| {
+                v.index = Some(index);
+                v.profile = Some(self.index);
+                v
+            },
+        )
     }
 
     pub fn iter_key_config<'a>(&'a self) -> impl Iterator<Item = VKAnalogKeyConfig<'a>> {
@@ -211,6 +217,11 @@ impl VKAnalogProfile {
             &self.data[pos..pos + VKSocdConfig::BYTE_SIZE],
             self.col_count,
         ))
+        .map(|mut v| {
+            v.profile = Some(self.index);
+            v.index = Some(index);
+            v
+        })
     }
 
     pub fn iter_socd_config<'a>(&'a self) -> impl Iterator<Item = VKSocdConfig<'a>> {
@@ -266,9 +277,10 @@ impl VKAnalogProfile {
             + self.okmc_count * VKOkmcConfig::BYTE_SIZE
             + self.socd_count * VKSocdConfig::BYTE_SIZE;
         let mut pkt = cmd.to_cmd();
-        pkt.report[3] = self.index as u8;
-        pkt.report[4] = Self::MAX_NAME_LEN as u8;
-        pkt.report[5..].copy_from_slice(&self.data[pos..pos + Self::MAX_NAME_LEN]);
+        let data = pkt.payload_mut();
+        data[0] = self.index as u8;
+        data[1] = Self::MAX_NAME_LEN as u8;
+        data[2..].copy_from_slice(&self.data[pos..pos + Self::MAX_NAME_LEN]);
         let resp = proto.device.raw_hid_send(&pkt)?;
         cmd.check_reply(&resp)?;
 

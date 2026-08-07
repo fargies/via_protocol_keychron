@@ -20,7 +20,36 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-mod protocol;
-mod rgb;
-mod analog;
-mod common;
+use serial_test::serial;
+use via_protocol::ViaResult;
+use via_protocol_keychron::{VKAnalogTrait, VKSocdKey, VKSocdType, ViaKeychronProtocol};
+
+use super::profile::is_analog;
+use crate::common::*;
+
+#[test]
+#[serial(keyboard)]
+fn socd_update() -> ViaResult<()> {
+    let kbd = get_keyboard(&HID)?;
+    let proto = ViaKeychronProtocol::new(&kbd);
+    if !is_analog(&proto)? {
+        return Ok(());
+    }
+
+    let profile = proto.get_analog_profile(0)?;
+    assert!(profile.socd_count > 0);
+
+    let mut socd = profile.get_socd_config(0)?;
+    let backup = socd.clone();
+    socd.set_key(VKSocdKey::Key1, 0);
+    socd.set_key(VKSocdKey::Key2, 3);
+    socd.set_type(VKSocdType::DeeperTravelSingle);
+    socd.send(&proto)?;
+    let profile = proto.get_analog_profile(0)?;
+    assert_eq!(socd, profile.get_socd_config(0)?);
+
+    backup.send(&proto)?;
+    let profile = proto.get_analog_profile(0)?;
+    assert_eq!(backup, profile.get_socd_config(0)?);
+    Ok(())
+}
