@@ -74,6 +74,13 @@ impl VKAnalogProfileInfo {
         Ok(())
     }
 
+    pub fn reset_profile(proto: &ViaKeychronProtocol, index: usize) -> ViaResult<()> {
+        let cmd = &VKAnalogCommandId::ResetProfile;
+        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index as u8]))?;
+        cmd.check_reply(&resp)?;
+        Ok(())
+    }
+
     /// @brief get number of profiles
     pub fn get_profile_count(&self) -> usize {
         self.data[1] as usize
@@ -290,6 +297,10 @@ impl VKAnalogProfile {
     /// @brief select the current profile
     pub fn select(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         VKAnalogProfileInfo::select_profile(proto, self.index)
+    }
+
+    pub fn save(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
+        VKAnalogProfileInfo::save_profile(proto, self.index)
     }
 
     pub fn load(proto: &ViaKeychronProtocol, index: usize) -> ViaResult<VKAnalogProfile> {
