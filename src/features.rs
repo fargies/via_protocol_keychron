@@ -31,6 +31,7 @@ use crate::{
 
 bitflags! {
     /// @brief features supported by the Keychron keyboard
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct VKFeatures: u16 {
         /// @brief default layer is supported
@@ -63,7 +64,7 @@ impl VKFeatures {
             Ok(value.clone())
         } else {
             let cmd = &VKCommandId::GetSupportFeature;
-            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+            let resp = proto.raw_send(&cmd.to_cmd())?;
 
             let payload = cmd.check_reply(&resp)?;
             let features = match VKProtocolVersion::load(proto)?.protocol {

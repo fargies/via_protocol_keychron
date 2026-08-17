@@ -129,7 +129,7 @@ impl VKSocdConfig<'_> {
             )
         })? as u8;
         payload[6] = self.data[2];
-        let resp = proto.device.raw_hid_send(&req)?;
+        let resp = proto.raw_send(&req)?;
         cmd.check_reply(&resp)?;
         Ok(())
     }

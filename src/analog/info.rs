@@ -39,13 +39,12 @@ impl VKAnalogInfo {
         } else {
             let protocol_version = Arc::new({
                 let cmd = &VKAnalogCommandId::GetProtocolVersion;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+                let resp = proto.raw_send(&cmd.to_cmd())?;
                 VKAnalogProtocolVersion::try_from(resp)?
             });
             let profile_info = Arc::new({
                 let resp = proto
-                    .device
-                    .raw_hid_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
+                    .raw_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
                 let mut profile_info = VKAnalogProfileInfo::try_from(resp)?;
 
                 profile_info.load_key_count(proto)?;

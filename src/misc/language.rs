@@ -25,6 +25,8 @@
 use via_protocol::{ViaError, ViaResult};
 
 use crate::{VKCommandMaker, VKMiscCommandId, ViaKeychronProtocol};
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
 pub enum VKLanguageLayout {
@@ -58,24 +60,27 @@ impl VKLanguageLayout {
 
     pub fn load(proto: &ViaKeychronProtocol<'_>) -> ViaResult<Self> {
         let cmd = &VKMiscCommandId::LanguageGet;
-        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        let resp = proto.raw_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
         Self::try_from(payload[0])
     }
 
     pub fn save(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKMiscCommandId::LanguageSet;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[*self as u8]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[*self as u8]))?;
 
         cmd.check_reply(&resp)?;
         Ok(())
+    }
+
+    pub fn iter() -> impl Iterator<Item = Self> {
+        (Self::EN_US as u8..).map_while(|i| Self::try_from(i).ok())
     }
 }
 
 impl TryFrom<u8> for VKLanguageLayout {
     type Error = ViaError;
 
-    #[tracing::instrument(level = "ERROR", err)]
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         if value == 0 || value > VKLanguageLayout::SL as u8 {
             Err(ViaError::Protocol(format!(

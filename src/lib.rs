@@ -44,7 +44,7 @@ pub use analog::*;
 mod data;
 pub use data::{VKMiscFeatures, ViaReportData};
 
-pub use via_protocol::{KeyboardDevice, ViaError, ViaResult};
+pub use via_protocol::{KeyboardDevice, KeyboardInfo, ViaError, ViaResult};
 
 pub(crate) mod utils;
 

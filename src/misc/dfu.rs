@@ -47,6 +47,7 @@ impl TryFrom<u8> for VKDfuInfoType {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
 pub enum VKDfuChipType {
@@ -80,8 +81,7 @@ pub struct VKDfuInfo {
 impl VKDfuInfo {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         proto
-            .device
-            .raw_hid_send(&VKMiscCommandId::DfuInfoGet.to_cmd())
+            .raw_send(&VKMiscCommandId::DfuInfoGet.to_cmd())
             .and_then(Self::try_from)
     }
 }

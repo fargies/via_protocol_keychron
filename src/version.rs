@@ -60,8 +60,7 @@ impl VKProtocolVersion {
         } else {
             VKProtocolVersion::try_from(
                 &proto
-                    .device
-                    .raw_hid_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
+                    .raw_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
             )
             .map(Arc::new)
             .inspect(|p| {

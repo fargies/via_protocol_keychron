@@ -26,8 +26,12 @@ use via_protocol::VIA_REPORT_SIZE;
 /// @brief Represents the data of a VIA report
 pub type ViaReportData = [u8; VIA_REPORT_SIZE];
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
 bitflags! {
     /// @brief Represents the miscellaneous features of the device
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct VKMiscFeatures: u8 {
         /// @brief DFU info is available

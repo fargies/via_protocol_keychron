@@ -34,15 +34,14 @@ pub struct VKReportRateConfig {
 impl VKReportRateConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         proto
-            .device
-            .raw_hid_send(&VKMiscCommandId::ReportRateGet.to_cmd())
+            .raw_send(&VKMiscCommandId::ReportRateGet.to_cmd())
             .and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKMiscCommandId::ReportRateSet;
 
-        let resp = proto.device.raw_hid_send(&cmd.to_req(self.data.as_ref()))?;
+        let resp = proto.raw_send(&cmd.to_req(self.data.as_ref()))?;
         cmd.check_reply(&resp)?;
         Ok(())
     }

@@ -42,17 +42,17 @@ impl VKRgbInfo {
         } else {
             let protocol_version = Arc::new({
                 let cmd = &VKRgbCommandId::RgbGetProtocolVer;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+                let resp = proto.raw_send(&cmd.to_cmd())?;
                 VKRgbProtocolVersion::try_from(resp)?
             });
             let mixed = Arc::new({
                 let cmd = &VKRgbCommandId::MixedEffectRgbGetInfo;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+                let resp = proto.raw_send(&cmd.to_cmd())?;
                 VKRgbMixedInfo::try_from(resp)?
             });
             let led_count = {
                 let cmd = &VKRgbCommandId::RgbGetLedCount;
-                let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+                let resp = proto.raw_send(&cmd.to_cmd())?;
                 cmd.check_reply(&resp)?[0] as usize
             };
             let ret = Arc::new(Self {

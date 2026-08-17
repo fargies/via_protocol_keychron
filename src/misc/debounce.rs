@@ -26,6 +26,7 @@ use via_protocol::{ViaError, ViaResult};
 
 use crate::{VKCommandMaker, VKMiscCommandId, ViaKeychronProtocol, ViaReportData};
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
 pub enum VKDebounceType {
@@ -36,14 +37,19 @@ pub enum VKDebounceType {
     SymEagerPerKey = 4,
     AsymEagerDeferPerKey = 5,
     None = 6,
-    Max = 7,
+}
+
+impl VKDebounceType {
+    pub fn iter() -> impl Iterator<Item = Self> {
+        (0..).map_while(|i| Self::try_from(i).ok())
+    }
 }
 
 impl TryFrom<u8> for VKDebounceType {
     type Error = ViaError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value <= VKDebounceType::Max as u8 {
+        if value <= VKDebounceType::None as u8 {
             Ok(unsafe { std::mem::transmute::<u8, VKDebounceType>(value) })
         } else {
             Err(ViaError::Protocol(format!(
@@ -61,14 +67,14 @@ pub struct VKDebounceConfig {
 impl VKDebounceConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         let cmd = &VKMiscCommandId::DebounceGet;
-        proto.device.raw_hid_send(&cmd.to_cmd()).and_then(Self::try_from)
+        proto
+            .raw_send(&cmd.to_cmd())
+            .and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKMiscCommandId::DebounceSet;
-        let resp = proto
-            .device
-            .raw_hid_send(&cmd.to_req(&self.data))?;
+        let resp = proto.raw_send(&cmd.to_req(&self.data))?;
 
         cmd.check_reply(&resp)?;
         Ok(())
@@ -106,7 +112,9 @@ impl TryFrom<ViaReportData> for VKDebounceConfig {
     fn try_from(value: ViaReportData) -> Result<Self, Self::Error> {
         let payload = VKMiscCommandId::DebounceGet.check_reply(&value)?;
         VKDebounceType::try_from(payload[0])?;
-        Ok(VKDebounceConfig { data: payload.into() })
+        Ok(VKDebounceConfig {
+            data: payload.into(),
+        })
     }
 }
 

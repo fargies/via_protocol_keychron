@@ -32,8 +32,7 @@ pub struct VKNkroConfig {
 impl VKNkroConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         proto
-            .device
-            .raw_hid_send(&VKMiscCommandId::NkroGet.to_cmd())
+            .raw_send(&VKMiscCommandId::NkroGet.to_cmd())
             .and_then(Self::try_from)
     }
 
@@ -41,7 +40,7 @@ impl VKNkroConfig {
         let cmd = &VKMiscCommandId::NkroSet;
         let req = cmd.to_req(&[if self.is_enabled() { 1 } else { 0 }]);
 
-        let resp = proto.device.raw_hid_send(&req)?;
+        let resp = proto.raw_send(&req)?;
         cmd.check_reply(&resp)?;
         Ok(())
     }
@@ -71,8 +70,8 @@ impl std::fmt::Display for VKNkroConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VKNkroConfig")
             .field("enabled", &self.is_enabled())
-            .field("available", &self.is_enabled())
-            .field("adaptive", &self.is_enabled())
+            .field("available", &self.is_available())
+            .field("adaptive", &self.is_adaptive())
             .finish()
     }
 }

@@ -117,7 +117,7 @@ impl VKRgb {
     /// @brief save current config to EEPROM
     pub fn save(proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKRgbCommandId::RgbSave;
-        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        let resp = proto.raw_send(&cmd.to_cmd())?;
         cmd.check_reply(&resp)?;
         Ok(())
     }

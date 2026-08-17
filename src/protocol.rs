@@ -25,7 +25,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use via_protocol::{KeyboardDevice, KeyboardInfo, VIA_USAGE, VIA_USAGE_PAGE, ViaError, ViaResult};
 
 use crate::{
-    VKAnalogInfo, VKCommandId, VKCommandMaker, VKFeatures, VKMiscInfo, VKProtocolVersion, VKRgbInfo,
+    VKAnalogInfo, VKCommandId, VKCommandMaker, VKFeatures, VKMiscInfo, VKProtocolVersion,
+    VKRgbInfo, ViaReportData,
 };
 
 pub const KEYCHRON_VENDOR_ID: u16 = 0x3434;
@@ -109,7 +110,7 @@ impl<'a> ViaKeychronProtocol<'a> {
             Ok(value.clone())
         } else {
             let cmd = &VKCommandId::GetFirmwareVersion;
-            let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+            let resp = self.raw_send(&cmd.to_cmd())?;
             let payload = cmd.check_reply(&resp)?;
             str::from_utf8(
                 &payload[..payload
@@ -130,9 +131,16 @@ impl<'a> ViaKeychronProtocol<'a> {
     /// @returns `(default_layer_state, layer_state)`
     pub fn get_default_layer(&self) -> ViaResult<(u8, u8)> {
         let cmd = &VKCommandId::GetDefaultLayer;
-        let resp = self.device.raw_hid_send(&cmd.to_cmd())?;
+        let resp = self.raw_send(&cmd.to_cmd())?;
         let payload = cmd.check_reply(&resp)?;
         Ok((payload[0], payload[1]))
+    }
+
+    /// send request and return reply
+    #[tracing::instrument(level = "TRACE", ret, err, skip_all)]
+    pub fn raw_send(&self, report: &[u8; 33]) -> ViaResult<ViaReportData> {
+        tracing::trace!(?report, "sending");
+        self.device.raw_hid_send(report)
     }
 }
 

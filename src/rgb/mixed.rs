@@ -88,8 +88,7 @@ impl VKRgbMixedRegions {
         while start < key_count {
             let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
             let resp = proto
-                .device
-                .raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+                .raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
             ret.regions.extend(&cmd.check_reply(&resp)?[0..count]);
             start += count;
         }
@@ -98,7 +97,7 @@ impl VKRgbMixedRegions {
 
     pub fn load_part(proto: &ViaKeychronProtocol, start: u8, count: u8) -> ViaResult<Self> {
         let cmd = &VKRgbCommandId::MixedEffectRgbGetRegions;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[start, count]))?;
         Self::try_from(resp, start, count)
     }
 
@@ -115,7 +114,7 @@ impl VKRgbMixedRegions {
             data.push(count as u8);
             data.extend(&self.regions[start..start + count]);
             tracing::trace!(req = ?data);
-            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            let resp = proto.raw_send(&cmd.to_req(data.as_ref()))?;
             cmd.check_reply(&resp)?;
             start += count;
         }
@@ -160,8 +159,7 @@ impl VKRgbMixedEffectList {
             let count = (effects_count - start).min(Self::MAX_REQ_ITEMS);
             let resp =
                 proto
-                    .device
-                    .raw_hid_send(&cmd.to_req(&[region, start as u8, count as u8]))?;
+                    .raw_send(&cmd.to_req(&[region, start as u8, count as u8]))?;
             let payload = cmd.check_reply(&resp)?;
             for i in 0..count {
                 ret.effects.push(VKRgbMixedEffect::try_from(
@@ -176,8 +174,7 @@ impl VKRgbMixedEffectList {
     pub fn load_part(proto: &ViaKeychronProtocol, region: u8, start: u8, count: u8) -> ViaResult<Self> {
         let cmd = &VKRgbCommandId::MixedEffectRgbGetEffectList;
         let resp = proto
-            .device
-            .raw_hid_send(&cmd.to_req(&[region, start, count]))?;
+            .raw_send(&cmd.to_req(&[region, start, count]))?;
         let mut ret = Self {
             region,
             start,
@@ -209,7 +206,7 @@ impl VKRgbMixedEffectList {
                 self.effects[start + i].serialize(&mut data[3 + VKRgbMixedEffect::BYTE_SIZE * i..])?;
             }
             tracing::trace!(req = ?data);
-            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            let resp = proto.raw_send(&cmd.to_req(data.as_ref()))?;
             cmd.check_reply(&resp)?;
             start += count;
         }

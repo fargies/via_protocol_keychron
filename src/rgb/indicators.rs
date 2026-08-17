@@ -44,13 +44,13 @@ pub struct VKRgbIndicatorsConfig {
 impl VKRgbIndicatorsConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         let cmd = &VKRgbCommandId::GetIndicatorsConfig;
-        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        let resp = proto.raw_send(&cmd.to_cmd())?;
         Self::try_from(resp)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKRgbCommandId::SetIndicatorsConfig;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&self.data[1..]))?;
+        let resp = proto.raw_send(&cmd.to_req(&self.data[1..]))?;
 
         cmd.check_reply(&resp)?;
         Ok(())

@@ -170,7 +170,7 @@ impl VKAnalogKeyConfig<'_> {
             payload[5] = 1;
         }
 
-        let resp = proto.device.raw_hid_send(&req)?;
+        let resp = proto.raw_send(&req)?;
         cmd.check_reply(&resp)?;
         Ok(())
     }
@@ -221,7 +221,7 @@ impl VKAnalogKeyConfig<'_> {
             _ => {}
         }
 
-        let resp = proto.device.raw_hid_send(&req)?;
+        let resp = proto.raw_send(&req)?;
         cmd.check_reply(&resp)?;
         Ok(())
     }

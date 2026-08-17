@@ -140,7 +140,7 @@ pub enum VKOkmcActivation {
 }
 
 impl VKOkmcActivation {
-    pub fn iter() -> impl Iterator<Item = VKOkmcActivation> {
+    pub fn iter() -> impl Iterator<Item = Self> {
         (0..).map_while(|i| Self::try_from(i).ok())
     }
 }

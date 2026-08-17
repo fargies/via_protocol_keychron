@@ -40,7 +40,7 @@ impl VKRgbPerKeyType {
     /// @brief load [VKRgbPerKeyType] from device
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<VKRgbPerKeyType> {
         let cmd = &VKRgbCommandId::PerKeyRgbGetType;
-        let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+        let resp = proto.raw_send(&cmd.to_cmd())?;
         Self::try_from(resp)
     }
 
@@ -48,7 +48,7 @@ impl VKRgbPerKeyType {
     /// @details use [VKRgb::save] to persist changes
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKRgbCommandId::PerKeyRgbSetType;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[*self as u8]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[*self as u8]))?;
 
         cmd.check_reply(&resp)?;
         Ok(())
@@ -101,8 +101,7 @@ impl VKRgbPerKeyConfig {
         while start < key_count {
             let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
             let resp = proto
-                .device
-                .raw_hid_send(&cmd.to_req(&[start as u8, count as u8]))?;
+                .raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
             let value = cmd.check_reply(&resp)?;
             for i in 0..count {
                 ret.config
@@ -120,7 +119,7 @@ impl VKRgbPerKeyConfig {
             config: Vec::with_capacity(count as usize),
         };
 
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[start, count]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[start, count]))?;
         let value = cmd.check_reply(&resp)?;
         for i in 0..count as usize {
             ret.config
@@ -144,7 +143,7 @@ impl VKRgbPerKeyConfig {
             for (index, hsv) in self.config[start..start + count].iter().enumerate() {
                 hsv.serialize(&mut data[(2 + index * 3)..])?;
             }
-            let resp = proto.device.raw_hid_send(&cmd.to_req(data.as_ref()))?;
+            let resp = proto.raw_send(&cmd.to_req(data.as_ref()))?;
             cmd.check_reply(&resp)?;
             start += count;
         }

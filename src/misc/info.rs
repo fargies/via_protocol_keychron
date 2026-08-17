@@ -41,7 +41,7 @@ impl VKMiscInfo {
             Ok(value.clone())
         } else {
             let cmd = &VKMiscCommandId::MiscGetProtocolVer;
-            let resp = proto.device.raw_hid_send(&cmd.to_cmd())?;
+            let resp = proto.raw_send(&cmd.to_cmd())?;
             let payload = cmd.check_reply(&resp)?;
             let features = match VKProtocolVersion::load(proto)?.protocol {
                 VKProtocolType::Zmk => VKMiscFeatures::DEBOUNCE,

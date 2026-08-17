@@ -34,8 +34,7 @@ pub struct VKWirelessLpmConfig {
 impl VKWirelessLpmConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         proto
-            .device
-            .raw_hid_send(&VKMiscCommandId::WirelessLpmGet.to_cmd())
+            .raw_send(&VKMiscCommandId::WirelessLpmGet.to_cmd())
             .and_then(Self::try_from)
     }
 
@@ -43,7 +42,7 @@ impl VKWirelessLpmConfig {
         let cmd = &VKMiscCommandId::WirelessLpmSet;
         let req = cmd.to_req(self.data.as_ref());
 
-        let resp = proto.device.raw_hid_send(&req)?;
+        let resp = proto.raw_send(&req)?;
         cmd.check_reply(&resp)?;
         Ok(())
     }
@@ -61,7 +60,7 @@ impl VKWirelessLpmConfig {
     }
 
     pub fn set_connected_idle_time(&mut self, value: u16) {
-        self.data[2..3].copy_from_slice(&value.to_le_bytes());
+        self.data[2..4].copy_from_slice(&value.to_le_bytes());
     }
 }
 

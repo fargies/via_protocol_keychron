@@ -41,7 +41,7 @@ impl VKAnalogProfileInfo {
 
     pub(crate) fn load_key_count(&mut self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::GetCalibratedValue;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[0xFF, 0xFF]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[0xFF, 0xFF]))?;
         let payload = cmd.check_reply(&resp)?;
         self.data[6] = payload[0]; /* rows */
         self.data[7] = payload[2]; /* cols */
@@ -55,7 +55,7 @@ impl VKAnalogProfileInfo {
 
     pub fn select_profile(proto: &ViaKeychronProtocol, index: usize) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::SelectProfile;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index as u8]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[index as u8]))?;
         cmd.check_reply(&resp)?;
         if let Some(info) = Arc::make_mut(&mut proto.get_info_mut())
             .analog
@@ -69,14 +69,14 @@ impl VKAnalogProfileInfo {
 
     pub fn save_profile(proto: &ViaKeychronProtocol, index: usize) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::SaveProfile;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index as u8]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[index as u8]))?;
         cmd.check_reply(&resp)?;
         Ok(())
     }
 
     pub fn reset_profile(proto: &ViaKeychronProtocol, index: usize) -> ViaResult<()> {
         let cmd = &VKAnalogCommandId::ResetProfile;
-        let resp = proto.device.raw_hid_send(&cmd.to_req(&[index as u8]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[index as u8]))?;
         cmd.check_reply(&resp)?;
         Ok(())
     }
@@ -288,7 +288,7 @@ impl VKAnalogProfile {
         data[0] = self.index as u8;
         data[1] = Self::MAX_NAME_LEN as u8;
         data[2..].copy_from_slice(&self.data[pos..pos + Self::MAX_NAME_LEN]);
-        let resp = proto.device.raw_hid_send(&pkt)?;
+        let resp = proto.raw_send(&pkt)?;
         cmd.check_reply(&resp)?;
 
         Ok(())
@@ -312,7 +312,7 @@ impl VKAnalogProfile {
         let mut offset = 0;
         while offset < total_size {
             let size = Self::MAX_REQ_RAW_BYTES.min(total_size - offset);
-            let resp = proto.device.raw_hid_send(&cmd.to_req(&[
+            let resp = proto.raw_send(&cmd.to_req(&[
                 index as u8,
                 (offset & 0xFF) as u8,
                 ((offset >> 8) & 0xFF) as u8,
