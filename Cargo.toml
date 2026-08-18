@@ -6,8 +6,8 @@ edition = "2024"
 
 [dependencies]
 bitflags = "2.13.0"
+csscolorparser = { version = "0.8.3", optional = true }
 hidapi = "2.6.6"
-palette = { version = "0.7.6", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive", "rc"], optional = true }
 tracing = "0.1.44"
 via-protocol = "0.1.0"
@@ -19,3 +19,4 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [features]
 serde = ["dep:serde", "bitflags/serde"]
+csscolorparser = ["dep:csscolorparser"]

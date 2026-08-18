@@ -22,7 +22,6 @@
 
 use std::sync::Arc;
 
-use palette::{FromColor, Hsv, IntoColor};
 use via_protocol::ViaError;
 
 use crate::{
@@ -99,7 +98,10 @@ impl VKCommandMaker for VKRgbCommandId {
         report[0] = 0x00;
         report[1] = VKCommandId::KeychronRgb as u8;
         report[2] = self as u8;
-        VKCommand { report, payload_offset: 3 }
+        VKCommand {
+            report,
+            payload_offset: 3,
+        }
     }
 
     /// @brief generate [VKCommand] from a [VKRgbCommandId] and data
@@ -268,42 +270,64 @@ impl TryFrom<&[u8]> for VKHsv {
     }
 }
 
-impl From<VKHsv> for Hsv {
-    fn from(value: VKHsv) -> Self {
-        Hsv::new(
-            value.hue as f32 * 360.0 / 255.0,
-            value.saturation as f32 / 255.0,
-            value.value as f32 / 255.0,
+impl From<&[u8; 3]> for VKHsv {
+    fn from(value: &[u8; 3]) -> Self {
+        Self {
+            hue: value[0],
+            saturation: value[1],
+            value: value[2],
+        }
+    }
+}
+
+#[cfg(feature = "csscolorparser")]
+impl From<&csscolorparser::Color> for VKHsv {
+    fn from(value: &csscolorparser::Color) -> Self {
+        let value = value.to_hsva();
+        Self {
+            hue: (value[0] / 360f32 * 255f32).round() as u8,
+            saturation: (value[1] * 255f32).round() as u8,
+            value: (value[2] * 255f32).round() as u8,
+        }
+    }
+}
+
+#[cfg(feature = "csscolorparser")]
+impl From<csscolorparser::Color> for VKHsv {
+    fn from(value: csscolorparser::Color) -> Self {
+        Self::from(&value)
+    }
+}
+
+#[cfg(feature = "csscolorparser")]
+impl From<&VKHsv> for csscolorparser::Color {
+    fn from(value: &VKHsv) -> Self {
+        Self::from_hsva(
+            value.hue as f32 * 360f32 / 255f32,
+            value.saturation as f32 / 255f32,
+            value.value as f32 / 255f32,
+            1f32,
         )
     }
 }
 
-impl<T> FromColor<T> for VKHsv
-where
-    T: IntoColor<Hsv>,
-{
-    fn from_color(value: T) -> Self {
-        let value = value.into_color();
-        Self {
-            hue: (value.hue.into_positive_degrees() / 360.0 * 255.0).round() as u8,
-            saturation: (value.saturation * 255.0).round() as u8,
-            value: (value.value * 255.0).round() as u8,
-        }
+#[cfg(feature = "csscolorparser")]
+impl From<VKHsv> for csscolorparser::Color {
+    fn from(value: VKHsv) -> Self {
+        Self::from(&value)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use palette::{FromColor, Hsv, named};
-
-    use super::*;
-
+    #[cfg(feature = "csscolorparser")]
     #[test]
-    fn vkhsv() {
-        let color = Hsv::from_color(named::BLUE.into_format::<f32>());
-        let hsv: VKHsv = color.into_color();
-        tracing::trace!(?hsv);
+    fn vkhsv_csscolorparser() {
+        use super::*;
+        use csscolorparser::{parse, Color};
 
-        assert_eq!(color, hsv.into());
+        let color = parse("green").unwrap();
+        let vkhsv = VKHsv::from(&color);
+        assert_eq!(Color::from(vkhsv).to_rgba8(), color.to_rgba8());
     }
 }

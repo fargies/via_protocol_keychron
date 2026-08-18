@@ -26,7 +26,9 @@ use via_protocol::{ViaError, ViaResult};
 use crate::{VKCommandMaker, VKHsv, VKRgbCommandId, ViaKeychronProtocol, ViaReportData};
 
 bitflags! {
-    #[derive(Debug)]
+    /// @brief Represents available indicators
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct VKRgbIndicators: u8 {
         const NUM_LOCK = 0b1;
         const CAPS_LOCK = 0b10;

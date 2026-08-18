@@ -20,13 +20,12 @@
 ** Author: Sylvain Fargier <fargier.sylvain@gmail.com>
 */
 
-use palette::{IntoColor, named};
 use serial_test::serial;
 use via_protocol::{ViaProtocol, ViaResult};
 
 use crate::common::*;
 
-use via_protocol_keychron::{VKFeatures, VKRgbTrait, ViaKeychronProtocol};
+use via_protocol_keychron::{VKFeatures, VKHsv, VKRgbTrait, ViaKeychronProtocol};
 
 #[test]
 #[serial(keyboard)]
@@ -50,7 +49,7 @@ fn rgb() -> ViaResult<()> {
     let mut indicators = proto.get_indicators()?;
     tracing::info!(%indicators);
     let initial = indicators.get_color();
-    indicators.set_color(&named::RED.into_format::<f32>().into_color());
+    indicators.set_color(&VKHsv::from(&[100, 255, 255]));
     proto.set_indicators(&indicators)?;
     indicators.set_color(&initial);
     proto.set_indicators(&indicators)?;
