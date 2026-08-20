@@ -60,6 +60,8 @@ impl VKRgbInfo {
                 mixed,
                 led_count,
             });
+
+
             Arc::make_mut(&mut proto.get_info_mut())
                 .rgb
                 .replace(Arc::clone(&ret));

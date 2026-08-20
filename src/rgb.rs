@@ -43,6 +43,9 @@ pub use per_key::*;
 mod mixed;
 pub use mixed::*;
 
+mod layout;
+pub use layout::*;
+
 /// RGB command IDs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -134,6 +137,9 @@ pub trait VKRgbTrait {
     /// @brief get RGB info
     fn get_rgb_info(&self) -> ViaResult<Arc<VKRgbInfo>>;
 
+    /// @brief get RGB physical layout
+    fn get_rgb_layout(&self) -> ViaResult<VKRgbLayout>;
+
     /// @brief save RGB config to EEPROM
     fn save_rgb(&self) -> ViaResult<()>;
 
@@ -182,6 +188,10 @@ impl VKRgbTrait for ViaKeychronProtocol<'_> {
 
     fn get_rgb_info(&self) -> ViaResult<Arc<VKRgbInfo>> {
         VKRgbInfo::load(self)
+    }
+
+    fn get_rgb_layout(&self) -> ViaResult<VKRgbLayout> {
+        VKRgbLayout::load(self)
     }
 
     fn get_indicators(&self) -> ViaResult<VKRgbIndicatorsConfig> {

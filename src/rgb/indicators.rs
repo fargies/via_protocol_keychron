@@ -66,7 +66,7 @@ impl VKRgbIndicatorsConfig {
         self.data[1] != 0
     }
 
-    pub fn enable(&mut self, value: bool) {
+    pub fn set_enabled(&mut self, value: bool) {
         self.data[1] = if value { 1 } else { 0 };
     }
 
