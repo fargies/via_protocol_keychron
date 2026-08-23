@@ -24,7 +24,9 @@ use std::sync::Arc;
 
 use via_protocol::{ViaError, ViaResult};
 
-use crate::{VKCommandMaker, VKRgbCommandId, VKRgbInfo, ViaKeychronProtocol, ViaReportData, VKRgbTrait};
+use crate::{
+    VKCommandMaker, VKRgbCommandId, VKRgbInfo, VKRgbTrait, ViaKeychronProtocol, ViaReportData,
+};
 
 #[derive(Debug, Clone)]
 pub struct VKRgbMixedInfo {
@@ -87,8 +89,7 @@ impl VKRgbMixedRegions {
         let mut start = 0;
         while start < key_count {
             let count = (key_count - start).min(Self::MAX_REQ_ITEMS);
-            let resp = proto
-                .raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            let resp = proto.raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
             ret.regions.extend(&cmd.check_reply(&resp)?[0..count]);
             start += count;
         }
@@ -157,9 +158,7 @@ impl VKRgbMixedEffectList {
         let mut start = 0;
         while start < effects_count {
             let count = (effects_count - start).min(Self::MAX_REQ_ITEMS);
-            let resp =
-                proto
-                    .raw_send(&cmd.to_req(&[region, start as u8, count as u8]))?;
+            let resp = proto.raw_send(&cmd.to_req(&[region, start as u8, count as u8]))?;
             let payload = cmd.check_reply(&resp)?;
             for i in 0..count {
                 ret.effects.push(VKRgbMixedEffect::try_from(
@@ -171,10 +170,14 @@ impl VKRgbMixedEffectList {
         Ok(ret)
     }
 
-    pub fn load_part(proto: &ViaKeychronProtocol, region: u8, start: u8, count: u8) -> ViaResult<Self> {
+    pub fn load_part(
+        proto: &ViaKeychronProtocol,
+        region: u8,
+        start: u8,
+        count: u8,
+    ) -> ViaResult<Self> {
         let cmd = &VKRgbCommandId::MixedEffectRgbGetEffectList;
-        let resp = proto
-            .raw_send(&cmd.to_req(&[region, start, count]))?;
+        let resp = proto.raw_send(&cmd.to_req(&[region, start, count]))?;
         let mut ret = Self {
             region,
             start,
@@ -191,8 +194,9 @@ impl VKRgbMixedEffectList {
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {
         let cmd = &VKRgbCommandId::MixedEffectRgbSetEffectList;
-        let mut data =
-            Vec::with_capacity(3 + VKRgbMixedEffect::BYTE_SIZE * self.effects.len().min(Self::MAX_REQ_ITEMS));
+        let mut data = Vec::with_capacity(
+            3 + VKRgbMixedEffect::BYTE_SIZE * self.effects.len().min(Self::MAX_REQ_ITEMS),
+        );
 
         let mut start = 0;
         while start < self.effects.len() {
@@ -203,7 +207,8 @@ impl VKRgbMixedEffectList {
             data.push(count as u8);
             data.resize(3 + VKRgbMixedEffect::BYTE_SIZE * count, 0);
             for i in 0..count {
-                self.effects[start + i].serialize(&mut data[3 + VKRgbMixedEffect::BYTE_SIZE * i..])?;
+                self.effects[start + i]
+                    .serialize(&mut data[3 + VKRgbMixedEffect::BYTE_SIZE * i..])?;
             }
             tracing::trace!(req = ?data);
             let resp = proto.raw_send(&cmd.to_req(data.as_ref()))?;
@@ -257,8 +262,11 @@ impl VKRgbMixedEffect {
             buffer[2] = self.saturation;
             buffer[3] = self.speed;
             buffer[4..8].copy_from_slice(self.time.to_le_bytes().as_slice());
-        Ok(())
+            Ok(())
         }
+    }
 
+    pub fn is_empty(&self) -> bool {
+        self.effect == 0 && self.time == 0
     }
 }
