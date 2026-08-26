@@ -236,6 +236,7 @@ impl VKRgbTrait for ViaKeychronProtocol<'_> {
 }
 
 /// @brief RGB HSV color as used by Keychron keyboards
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VKHsv {
     pub hue: u8,
