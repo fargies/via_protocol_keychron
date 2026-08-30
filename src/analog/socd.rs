@@ -87,7 +87,10 @@ impl VKSocdConfig<'_> {
     }
 
     pub fn set_key(&mut self, key: VKSocdKey, key_index: usize) {
-        let (col, row) = ((key_index % self.col_count) as u8, (key_index / self.col_count) as u8);
+        let (col, row) = (
+            (key_index % self.col_count) as u8,
+            (key_index / self.col_count) as u8,
+        );
         let data = self.data.to_mut();
         match key {
             VKSocdKey::Key1 => data[0] = row | (col << 3),
@@ -124,9 +127,7 @@ impl VKSocdConfig<'_> {
         payload[3] = self.data[1] & 0x7;
         payload[4] = self.data[1] >> 3;
         payload[5] = self.index.ok_or_else(|| {
-            ViaError::Protocol(
-                "Socd index must be set to invoke VKSocdConfig::send".into(),
-            )
+            ViaError::Protocol("Socd index must be set to invoke VKSocdConfig::send".into())
         })? as u8;
         payload[6] = self.data[2];
         let resp = proto.raw_send(&req)?;

@@ -27,7 +27,7 @@ use via_protocol::VIA_REPORT_SIZE;
 pub type ViaReportData = [u8; VIA_REPORT_SIZE];
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 bitflags! {
     /// @brief Represents the miscellaneous features of the device

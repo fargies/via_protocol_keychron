@@ -26,7 +26,7 @@ pub use debug::DebugIter;
 
 pub(crate) enum DebugAsDisplay<'a, T> {
     Borrowed(&'a T),
-    Owned(T)
+    Owned(T),
 }
 
 impl<'a, T> From<T> for DebugAsDisplay<'a, T> {
@@ -45,7 +45,6 @@ impl<'a, T> std::fmt::Debug for DebugAsDisplay<'a, T>
 where
     T: std::fmt::Display,
 {
-
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DebugAsDisplay::Borrowed(value) => value.fmt(f),

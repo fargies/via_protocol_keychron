@@ -67,9 +67,7 @@ pub struct VKDebounceConfig {
 impl VKDebounceConfig {
     pub fn load(proto: &ViaKeychronProtocol) -> ViaResult<Self> {
         let cmd = &VKMiscCommandId::DebounceGet;
-        proto
-            .raw_send(&cmd.to_cmd())
-            .and_then(Self::try_from)
+        proto.raw_send(&cmd.to_cmd()).and_then(Self::try_from)
     }
 
     pub fn send(&self, proto: &ViaKeychronProtocol) -> ViaResult<()> {

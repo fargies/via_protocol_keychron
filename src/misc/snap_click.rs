@@ -105,8 +105,7 @@ impl VKSnapClickConfig {
         let mut start = 0;
         while start < sc_count {
             let count = (sc_count - start).min(Self::MAX_REQ_ITEMS);
-            let resp = proto
-                .raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
+            let resp = proto.raw_send(&cmd.to_req(&[start as u8, count as u8]))?;
             let value = cmd.check_reply(&resp)?;
             for i in 0..count {
                 ret.config

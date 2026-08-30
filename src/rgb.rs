@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn vkhsv_csscolorparser() {
         use super::*;
-        use csscolorparser::{parse, Color};
+        use csscolorparser::{Color, parse};
 
         let color = parse("green").unwrap();
         let vkhsv = VKHsv::from(&color);

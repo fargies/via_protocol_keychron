@@ -37,6 +37,7 @@ pub struct VKAnalogKeyConfig<'a> {
 
 impl VKAnalogKeyConfig<'_> {
     pub const BYTE_SIZE: usize = 4;
+    pub const MM_PER_UNIT: f32 = 10f32;
 
     pub fn get_mode(&self) -> ViaResult<VKAnalogKeyConfigMode> {
         let value = self.data[2] >> 4;

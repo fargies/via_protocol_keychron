@@ -32,9 +32,8 @@ pub type VKKeyCode = u16;
 #[derive(Debug, Clone)]
 pub struct VKOkmcConfig<'a> {
     pub data: Cow<'a, [u8]>,
-    pub index: usize
+    pub index: usize,
 }
-
 
 impl VKOkmcConfig<'_> {
     pub const BYTE_SIZE: usize = VKOkmcTravel::BYTE_SIZE + 16;
@@ -123,12 +122,11 @@ impl<'a> TryFrom<(&'a [u8], usize)> for VKOkmcConfig<'a> {
         } else {
             Ok(VKOkmcConfig {
                 data: Cow::Borrowed(&value[0..Self::BYTE_SIZE]),
-                index
+                index,
             })
         }
     }
 }
-
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(u8)]

@@ -21,6 +21,6 @@
 */
 
 mod features;
+mod layout;
 mod mixed;
 mod per_key;
-mod layout;

@@ -50,7 +50,14 @@ impl VKRgbLayout {
                 Ok(payload) => matrix.push(
                     payload
                         .iter()
-                        .map(|&v| if v == 0xFF { None } else { led_received += 1; Some(v) })
+                        .map(|&v| {
+                            if v == 0xFF {
+                                None
+                            } else {
+                                led_received += 1;
+                                Some(v)
+                            }
+                        })
                         .collect(),
                 ),
                 Err(err) if matrix.is_empty() => return Err(err),

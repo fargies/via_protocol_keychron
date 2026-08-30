@@ -24,7 +24,10 @@ use std::sync::Arc;
 
 use via_protocol::ViaResult;
 
-use crate::{VKAnalogCommandId, VKAnalogProfileInfo, VKAnalogProtocolVersion, VKCommandMaker, ViaKeychronProtocol};
+use crate::{
+    VKAnalogCommandId, VKAnalogProfileInfo, VKAnalogProtocolVersion, VKCommandMaker,
+    ViaKeychronProtocol,
+};
 
 #[derive(Debug, Clone)]
 pub struct VKAnalogInfo {
@@ -43,8 +46,7 @@ impl VKAnalogInfo {
                 VKAnalogProtocolVersion::try_from(resp)?
             });
             let profile_info = Arc::new({
-                let resp = proto
-                    .raw_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
+                let resp = proto.raw_send(&VKAnalogCommandId::GetProfilesInfo.to_cmd())?;
                 let mut profile_info = VKAnalogProfileInfo::try_from(resp)?;
 
                 profile_info.load_key_count(proto)?;

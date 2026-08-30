@@ -133,7 +133,10 @@ impl VKCommandMaker for VKAnalogCommandId {
         report[0] = 0x00;
         report[1] = VKCommandId::AnalogMatrix as u8;
         report[2] = self as u8;
-        VKCommand { report, payload_offset: 3 }
+        VKCommand {
+            report,
+            payload_offset: 3,
+        }
     }
 }
 

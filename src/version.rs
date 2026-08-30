@@ -58,16 +58,13 @@ impl VKProtocolVersion {
         if let Some(proto) = proto.get_info().protocol.as_ref() {
             Ok(Arc::clone(proto))
         } else {
-            VKProtocolVersion::try_from(
-                &proto
-                    .raw_send(&VKCommandId::GetProtocolVersion.to_cmd())?,
-            )
-            .map(Arc::new)
-            .inspect(|p| {
-                Arc::make_mut(&mut proto.get_info_mut())
-                    .protocol
-                    .replace(Arc::clone(p));
-            })
+            VKProtocolVersion::try_from(&proto.raw_send(&VKCommandId::GetProtocolVersion.to_cmd())?)
+                .map(Arc::new)
+                .inspect(|p| {
+                    Arc::make_mut(&mut proto.get_info_mut())
+                        .protocol
+                        .replace(Arc::clone(p));
+                })
         }
     }
 }
